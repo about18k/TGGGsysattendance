@@ -20,6 +20,7 @@ CREATE TABLE attendance (
   status TEXT CHECK(status IN ('On-Time', 'Late')),
   photo_path TEXT,
   work_documentation TEXT,
+  late_deduction_hours INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -63,3 +64,29 @@ CREATE POLICY "Coordinators can view all attendance" ON attendance
 -- Create indexes
 CREATE INDEX idx_attendance_user_date ON attendance(user_id, date DESC);
 CREATE INDEX idx_attendance_date ON attendance(date DESC);
+
+-- Create todos table
+CREATE TABLE todos (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  task TEXT NOT NULL,
+  completed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for todos
+ALTER TABLE todos ENABLE ROW LEVEL SECURITY;
+
+-- Create todos policies
+CREATE POLICY "Users can view own todos" ON todos
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own todos" ON todos
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own todos" ON todos
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own todos" ON todos
+  FOR DELETE USING (auth.uid() = user_id);
