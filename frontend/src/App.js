@@ -4,19 +4,44 @@ import Login from './Login';
 import Dashboard from './Dashboard';
 import Profile from './Profile';
 import TodoList from './TodoList';
+import Reports from './Reports';
 import './App.css';
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user') || '{}'));
+  const [token, setToken] = useState(
+    localStorage.getItem('token') || sessionStorage.getItem('token')
+  );
+  const [user, setUser] = useState(
+    JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}')
+  );
   const [currentPage, setCurrentPage] = useState(localStorage.getItem('currentPage') || 'dashboard');
   const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
     if (token) {
       fetchUserProfile();
+      // Check token validity periodically
+      const interval = setInterval(checkTokenValidity, 60000); // Check every minute
+      return () => clearInterval(interval);
     }
   }, [token]);
+
+  const checkTokenValidity = async () => {
+    try {
+      await axios.get('http://localhost:5000/api/profile', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      if (err.response?.status === 401) {
+        // Token expired, check if remember me was enabled
+        const rememberMe = localStorage.getItem('rememberMe');
+        if (!rememberMe) {
+          handleLogout();
+          alert('Your session has expired. Please log in again.');
+        }
+      }
+    }
+  };
 
   const fetchUserProfile = async () => {
     try {
@@ -36,6 +61,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.clear();
+    sessionStorage.clear();
     setToken(null);
     setUser({});
     setCurrentPage('dashboard');
@@ -56,6 +82,8 @@ function App() {
         return <Profile token={token} user={user} onLogout={handleLogout} />;
       case 'todos':
         return <TodoList token={token} />;
+      case 'reports':
+        return <Reports token={token} />;
       default:
         return <Dashboard token={token} user={user} onLogout={handleLogout} />;
     }
@@ -70,7 +98,7 @@ function App() {
             alt="Triple G BuildHub Logo" 
             style={{ height: '40px', width: 'auto' }}
           />
-          <h1>Triple G BuildHub - OJT Attendance</h1>
+          <h1>Triple<span style={{ color: '#FF7120', fontSize: '1.5rem', fontWeight: '700' }}>G</span> BuildHub - OJT Attendance</h1>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <button 
@@ -103,6 +131,23 @@ function App() {
               }}
             >
               Todo List
+            </button>
+          )}
+          {user.role === 'coordinator' && (
+            <button 
+              onClick={() => changePage('reports')}
+              style={{
+                background: currentPage === 'reports' ? '#FF7120' : 'transparent',
+                color: currentPage === 'reports' ? 'white' : '#FF7120',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                transition: 'all 0.2s'
+              }}
+            >
+              Reports
             </button>
           )}
           <button 

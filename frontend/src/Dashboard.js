@@ -13,22 +13,80 @@ function Dashboard({ token, user, onLogout }) {
   const [userProfile, setUserProfile] = useState(null);
   const [interns, setInterns] = useState([]);
   const [selectedIntern, setSelectedIntern] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [buttonLoading, setButtonLoading] = useState(false);
 
   const showAlert = (type, title, message) => {
     setAlert({ type, title, message });
   };
 
-  const truncateText = (text, maxLength = 20) => {
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        const maxWidth = 600;
+        const maxHeight = 400;
+        let { width, height } = img;
+        
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height;
+            height = maxHeight;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(resolve, 'image/jpeg', 0.6);
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const truncateText = (text, maxLength = 8) => {
     if (!text || text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
   };
 
-  useEffect(() => {
-    fetchAttendance();
-    fetchUserProfile();
-    if (user.role === 'coordinator') {
-      fetchInterns();
+  const formatTime = (timeStr) => {
+    if (!timeStr || timeStr === '-') return '-';
+    
+    // If already in AM/PM format, return as is
+    if (timeStr.includes('AM') || timeStr.includes('PM')) {
+      return timeStr;
     }
+    
+    // Convert 24-hour to 12-hour format
+    const [hours, minutes] = timeStr.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      const promises = [fetchAttendance(), fetchUserProfile()];
+      if (user.role === 'coordinator') {
+        promises.push(fetchInterns());
+      }
+      await Promise.all(promises);
+      setLoading(false);
+    };
+    loadData();
     // eslint-disable-next-line
   }, []);
 
@@ -77,25 +135,32 @@ function Dashboard({ token, user, onLogout }) {
       return;
     }
 
-    const now = new Date();
-    const timeIn = now.toTimeString().slice(0, 5);
-    const formData = new FormData();
-    formData.append('time_in', timeIn);
-    formData.append('photo', photo);
+    setButtonLoading(true);
+    try {
+      const now = new Date();
+      const timeIn = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+      const formData = new FormData();
+      formData.append('time_in', timeIn);
+      
+      const compressedPhoto = await compressImage(photo);
+      formData.append('photo', compressedPhoto, 'photo.jpg');
 
-    const { data } = await axios.post(`${API}/attendance/checkin`, formData, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
-    });
-    
-    if (data.lateDeduction > 0) {
-      showAlert('warning', 'Late Check-In', 
-        `You are late by ${data.lateMinutes} minutes. You have been deducted ${data.lateDeduction} hour today.`);
-    } else {
-      showAlert('success', 'Checked In!', 'Your attendance has been recorded successfully.');
+      const { data } = await axios.post(`${API}/attendance/checkin`, formData, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (data.lateDeduction > 0) {
+        showAlert('warning', 'Late Check-In', 
+          `You are late by ${data.lateMinutes} minutes. You have been deducted ${data.lateDeduction} hour today.`);
+      } else {
+        showAlert('success', 'Checked In!', 'Your attendance has been recorded successfully.');
+      }
+      
+      fetchAttendance();
+      setPhoto(null);
+    } finally {
+      setButtonLoading(false);
     }
-    
-    fetchAttendance();
-    setPhoto(null);
   };
 
   const checkOut = async (id) => {
@@ -104,26 +169,47 @@ function Dashboard({ token, user, onLogout }) {
       return;
     }
 
-    const timeOut = new Date().toTimeString().slice(0, 5);
-    await axios.put(`${API}/attendance/checkout/${id}`, { 
-      time_out: timeOut,
-      work_documentation: workDoc 
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    showAlert('success', 'Checked Out!', 'You have successfully checked out.');
-    fetchAttendance();
-    setWorkDoc('');
+    setButtonLoading(true);
+    try {
+      const timeOut = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+      await axios.put(`${API}/attendance/checkout/${id}`, { 
+        time_out: timeOut,
+        work_documentation: workDoc 
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showAlert('success', 'Checked Out!', 'You have successfully checked out.');
+      fetchAttendance();
+      setWorkDoc('');
+    } finally {
+      setButtonLoading(false);
+    }
   };
 
-  const logOvertime = async (id) => {
-    const otIn = '19:00';
-    const otOut = '22:00';
-    await axios.put(`${API}/attendance/overtime/${id}`, { ot_time_in: otIn, ot_time_out: otOut }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    showAlert('success', 'Overtime Logged!', 'Your overtime has been recorded.');
-    fetchAttendance();
+  const overtimeCheckIn = async (id) => {
+    setButtonLoading(true);
+    try {
+      await axios.put(`${API}/attendance/overtime-in/${id}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showAlert('success', 'OT Check-In!', 'Your overtime check-in has been recorded.');
+      fetchAttendance();
+    } finally {
+      setButtonLoading(false);
+    }
+  };
+
+  const overtimeCheckOut = async (id) => {
+    setButtonLoading(true);
+    try {
+      await axios.put(`${API}/attendance/overtime-out/${id}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showAlert('success', 'OT Check-Out!', 'Your overtime check-out has been recorded.');
+      fetchAttendance();
+    } finally {
+      setButtonLoading(false);
+    }
   };
 
   return (
@@ -244,15 +330,105 @@ function Dashboard({ token, user, onLogout }) {
               </div>
               <button 
                 onClick={checkIn}
-                disabled={attendance[0] && attendance[0].date === new Date().toISOString().split('T')[0] && attendance[0].time_in}
+                disabled={buttonLoading || (attendance[0] && attendance[0].date === new Date().toISOString().split('T')[0] && attendance[0].time_in)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
               >
-                Check In
+                {buttonLoading ? (
+                  <>
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid transparent',
+                      borderTop: '2px solid white',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }}></div>
+                    Processing...
+                  </>
+                ) : 'Check In'}
               </button>
               {attendance[0] && !attendance[0].time_out && attendance[0].date === new Date().toISOString().split('T')[0] && (
-                <button onClick={() => checkOut(attendance[0].id)}>Check Out</button>
+                <button 
+                  onClick={() => checkOut(attendance[0].id)}
+                  disabled={buttonLoading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {buttonLoading ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid transparent',
+                        borderTop: '2px solid white',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }}></div>
+                      Processing...
+                    </>
+                  ) : 'Check Out'}
+                </button>
               )}
               {attendance[0] && attendance[0].time_out && !attendance[0].ot_time_in && attendance[0].date === new Date().toISOString().split('T')[0] && (
-                <button onClick={() => logOvertime(attendance[0].id)}>Log Overtime</button>
+                <button 
+                  onClick={() => overtimeCheckIn(attendance[0].id)}
+                  disabled={buttonLoading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {buttonLoading ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid transparent',
+                        borderTop: '2px solid white',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }}></div>
+                      Processing...
+                    </>
+                  ) : 'OT Check In'}
+                </button>
+              )}
+              {attendance[0] && attendance[0].ot_time_in && !attendance[0].ot_time_out && attendance[0].date === new Date().toISOString().split('T')[0] && (
+                <button 
+                  onClick={() => overtimeCheckOut(attendance[0].id)}
+                  disabled={buttonLoading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {buttonLoading ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid transparent',
+                        borderTop: '2px solid white',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }}></div>
+                      Processing...
+                    </>
+                  ) : 'OT Check Out'}
+                </button>
               )}
             </div>
 
@@ -338,8 +514,8 @@ function Dashboard({ token, user, onLogout }) {
                 <tr key={a.id}>
                   {user.role === 'coordinator' && <td>{a.full_name}</td>}
                   <td>{a.date}</td>
-                  <td>{a.time_in || '-'}</td>
-                  <td>{a.time_out || '-'}</td>
+                  <td>{formatTime(a.time_in)}</td>
+                  <td>{formatTime(a.time_out)}</td>
                   <td>
                     <span className={`status-badge ${a.status === 'On-Time' ? 'status-ontime' : 'status-late'}`}>
                       {a.status || '-'}
@@ -350,8 +526,8 @@ function Dashboard({ token, user, onLogout }) {
                       <span style={{color: '#ff9d5c', fontWeight: '600'}}>-{a.late_deduction_hours}hr</span>
                     ) : '-'}
                   </td>
-                  <td>{a.ot_time_in || '-'}</td>
-                  <td>{a.ot_time_out || '-'}</td>
+                  <td>{formatTime(a.ot_time_in)}</td>
+                  <td>{formatTime(a.ot_time_out)}</td>
                   <td>
                     {a.work_documentation ? (
                       <div>

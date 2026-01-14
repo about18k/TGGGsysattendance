@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
+import Lottie from 'lottie-react';
+import cityBuildingAnimation from './cityBuilding.json';
 
 const API = 'http://localhost:5000/api';
 const supabase = createClient(
@@ -17,7 +19,8 @@ function Login({ onLogin }) {
     lastName: '',
     email: '',
     password: '',
-    acceptTerms: false
+    acceptTerms: false,
+    rememberMe: false
   });
   const [error, setError] = useState('');
 
@@ -67,8 +70,17 @@ function Login({ onLogin }) {
         email: formData.email, 
         password: formData.password 
       });
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify({ role: data.role, name: data.name }));
+      
+      if (formData.rememberMe) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify({ role: data.role, name: data.name }));
+        localStorage.setItem('rememberMe', 'true');
+      } else {
+        sessionStorage.setItem('token', data.token);
+        sessionStorage.setItem('user', JSON.stringify({ role: data.role, name: data.name }));
+        localStorage.removeItem('rememberMe');
+      }
+      
       onLogin(data.token, { role: data.role, name: data.name });
     } catch { 
       setError('Invalid credentials. Please try again.'); 
@@ -118,9 +130,18 @@ function Login({ onLogin }) {
 
   return (
     <div className="flex min-h-screen bg-navy-dark items-center justify-center p-8">
-      <div className="flex w-full max-w-[1100px] h-[90vh] min-h-[700px] rounded-3xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+      <div className="flex w-full max-w-[1100px] h-[75vh] min-h-[600px] rounded-3xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
         {/* Left Side - Hero Section */}
         <div className="flex-1 bg-gradient-to-br from-navy to-navy-light flex items-center justify-center p-12 relative overflow-hidden">
+          {/* Lottie Animation Background - Positioned at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 h-[80%] opacity-40">
+            <Lottie 
+              animationData={cityBuildingAnimation} 
+              loop={true}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'bottom' }}
+            />
+          </div>
+          
           <div className="absolute w-[600px] h-[600px] bg-[radial-gradient(circle,_rgba(255,113,32,0.2)_0%,_transparent_70%)] rounded-full -top-[300px] -left-[250px] animate-pulse"></div>
           
           <div className="relative z-10 text-center max-w-[500px]">
@@ -148,13 +169,13 @@ function Login({ onLogin }) {
         </div>
 
         {/* Right Side - Form Section */}
-        <div className="flex-1 flex items-center justify-center bg-navy-dark p-12 overflow-y-auto scrollbar-none">
+        <div className="flex-1 flex items-center justify-center bg-navy-dark p-8 overflow-y-auto scrollbar-none">
           <div className="w-full max-w-[420px]">
-            <h2 className="text-white text-4xl font-semibold mb-3 tracking-tight">
+            <h2 className="text-white text-3xl font-semibold mb-2 tracking-tight">
               {isSignup ? 'Create an account' : 'Welcome Back'}
             </h2>
             
-            <p className="text-gray-400 mb-8 text-base">
+            <p className="text-gray-400 mb-6 text-sm">
               {isSignup ? (
                 <>Already have an account? <button className="text-primary font-semibold underline hover:text-primary-dark" onClick={() => setIsSignup(false)}>Log in</button></>
               ) : (
@@ -223,7 +244,17 @@ function Login({ onLogin }) {
               </div>
 
               {!isSignup && (
-                <div className="text-right mb-5">
+                <div className="flex items-center justify-between mb-5">
+                  <label className="flex items-center gap-2 text-gray-300 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="rememberMe"
+                      checked={formData.rememberMe}
+                      onChange={handleInputChange}
+                      className="w-[18px] h-[18px] cursor-pointer accent-primary"
+                    />
+                    <span>Remember me</span>
+                  </label>
                   <a href="#" className="text-primary text-sm hover:text-primary-dark hover:underline transition-colors">Forgot password?</a>
                 </div>
               )}
