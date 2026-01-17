@@ -134,7 +134,7 @@ function App() {
       case 'overtime-status':
         return <OvertimeStatus token={token} />;
       case 'overtime':
-        return <OvertimeForm token={token} user={user} />;
+        return <OvertimeForm token={token} />;
       default:
         return <Dashboard token={token} user={user} onLogout={handleLogout} />;
     }
