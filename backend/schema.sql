@@ -90,3 +90,42 @@ CREATE POLICY "Users can update own todos" ON todos
 
 CREATE POLICY "Users can delete own todos" ON todos
   FOR DELETE USING (auth.uid() = user_id);
+
+-- Overtime requests table
+CREATE TABLE overtime_requests (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) NOT NULL,
+  employee_name TEXT NOT NULL,
+  job_position TEXT NOT NULL,
+  date_completed DATE,
+  department TEXT,
+  periods JSONB NOT NULL DEFAULT '[]'::jsonb,
+  anticipated_hours NUMERIC,
+  explanation TEXT,
+  employee_signature TEXT,
+  supervisor_signature TEXT,
+  management_signature TEXT,
+  approval_date DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE overtime_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own overtime" ON overtime_requests
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own overtime" ON overtime_requests
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own overtime" ON overtime_requests
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Coordinators can view all overtime" ON overtime_requests
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE id = auth.uid() AND role = 'coordinator'
+    )
+  );
+
+CREATE INDEX idx_overtime_user_created ON overtime_requests(user_id, created_at DESC);

@@ -5,7 +5,6 @@ const API = 'http://localhost:5000/api';
 
 function TodoList({ token }) {
   const [todos, setTodos] = useState([]);
-  const [newTask, setNewTask] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dateTask, setDateTask] = useState('');
@@ -25,17 +24,6 @@ function TodoList({ token }) {
       headers: { Authorization: `Bearer ${token}` }
     });
     setTodos(data);
-  };
-
-  const addTodo = async (e) => {
-    e.preventDefault();
-    if (!newTask.trim()) return;
-    
-    await axios.post(`${API}/todos`, { task: newTask }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    setNewTask('');
-    fetchTodos();
   };
 
   const addDateTodo = async (e) => {
@@ -98,13 +86,13 @@ function TodoList({ token }) {
           <p>Keep track of your daily tasks</p>
           <div style={{marginTop: '1rem', padding: '1rem', background: 'rgba(255, 113, 32, 0.1)', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)'}}>
             <p style={{fontSize: '0.85rem', color: '#e8eaed', marginBottom: '0.5rem'}}>
-              📅 Select a date from the calendar to view and manage tasks for that day.
+              Select a date from the calendar to view and manage tasks for that day.
             </p>
             <p style={{fontSize: '0.85rem', color: '#e8eaed', marginBottom: '0.5rem'}}>
-              ✅ Check off completed tasks to track your progress.
+              Check off completed tasks to track your progress.
             </p>
             <p style={{fontSize: '0.85rem', color: '#e8eaed', marginBottom: '0'}}>
-              🗑️ Delete tasks you no longer need.
+              Delete tasks you no longer need.
             </p>
           </div>
 
@@ -131,7 +119,7 @@ function TodoList({ token }) {
                 gap: '0.5rem'
               }}
             >
-              <span>🔗</span>
+              <span>↗</span>
               View GitHub Issues
             </button>
           </div>
@@ -262,9 +250,9 @@ function TodoList({ token }) {
           <h3>Calendar</h3>
           <div style={{marginBottom: '1rem'}}>
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
-              <button onClick={() => changeMonth(-1)} style={{background: 'transparent', border: '1px solid rgba(255, 113, 32, 0.3)', color: '#FF7120', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer'}}>←</button>
+              <button onClick={() => changeMonth(-1)} style={{background: 'transparent', border: '1px solid rgba(255, 113, 32, 0.3)', color: '#FF7120', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer'}}>‹</button>
               <span style={{color: '#e8eaed', fontSize: '0.95rem', fontWeight: '500'}}>{monthName}</span>
-              <button onClick={() => changeMonth(1)} style={{background: 'transparent', border: '1px solid rgba(255, 113, 32, 0.3)', color: '#FF7120', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer'}}>→</button>
+              <button onClick={() => changeMonth(1)} style={{background: 'transparent', border: '1px solid rgba(255, 113, 32, 0.3)', color: '#FF7120', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer'}}>›</button>
             </div>
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.25rem', marginBottom: '0.5rem'}}>
               {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (

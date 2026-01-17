@@ -72,7 +72,8 @@ app.post('/api/signup', async (req, res) => {
   if (error) return res.status(400).json({ error: error.message });
   
   if (data.user) {
-    const { error: profileError } = await supabase
+    // Use service role to bypass RLS during initial profile creation
+    const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert({ 
         id: data.user.id, 
@@ -130,21 +131,57 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
   try {
     const { time_in } = req.body;
     const date = new Date().toISOString().split('T')[0];
+
+    // Allow up to 2 check-ins per day (morning + afternoon)
+    const { data: existingCheckins, error: existingError } = await supabaseAdmin
+      .from('attendance')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('date', date);
+
+    if (existingError) {
+      console.error('Check existing attendance error:', existingError);
+      return res.status(500).json({ error: existingError.message });
+    }
+
+    if (existingCheckins && existingCheckins.length >= 2) {
+      return res.status(400).json({ error: 'You have reached the maximum of 2 check-ins today.' });
+    }
+
+    const openSameDay = existingCheckins?.find(c => !c.time_out);
+    if (openSameDay) {
+      return res.status(400).json({ error: 'Please check out your current session before checking in again.' });
+    }
     
-    // Convert AM/PM time to 24-hour for comparison
+    // Convert AM/PM time to 24-hour for comparison and compute deductions
     const timeIn24 = convertTo24Hour(time_in);
-    const timeInDate = new Date(`${date}T${timeIn24}`);
-    const cutoffTime = new Date(`${date}T08:05:00`);
-    const onTimeLimit = new Date(`${date}T08:00:00`);
-    
-    let status = 'On-Time';
+    const [h, m] = timeIn24.split(':').map(v => parseInt(v, 10));
+    const minutesSinceMidnight = h * 60 + m;
+
+    // Morning window baseline: 08:00, late <=09:00 deduct 1hr, >=09:00 deduct 2hr
+    // Afternoon window baseline: 13:00, late <=14:00 deduct 1hr, >=14:00 deduct 2hr
+    const morningBaseline = 8 * 60;
+    const morningLate = 9 * 60;
+    const afternoonBaseline = 13 * 60;
+    const afternoonLate = 14 * 60;
+
+    const isMorning = minutesSinceMidnight < 12 * 60;
     let lateDeduction = 0;
     let lateMinutes = 0;
-    
-    if (timeInDate > cutoffTime) {
-      status = 'Late';
-      lateMinutes = Math.floor((timeInDate - onTimeLimit) / 60000);
-      lateDeduction = 1;
+    let status = 'On-Time';
+
+    if (isMorning) {
+      if (minutesSinceMidnight > morningBaseline) {
+        lateMinutes = minutesSinceMidnight - morningBaseline;
+        status = 'Late';
+        lateDeduction = minutesSinceMidnight >= morningLate ? 2 : 1;
+      }
+    } else {
+      if (minutesSinceMidnight > afternoonBaseline) {
+        lateMinutes = minutesSinceMidnight - afternoonBaseline;
+        status = 'Late';
+        lateDeduction = minutesSinceMidnight >= afternoonLate ? 2 : 1;
+      }
     }
     
     let photoUrl = null;
@@ -212,6 +249,17 @@ app.put('/api/attendance/checkout/:id', auth, async (req, res) => {
     const { time_out, work_documentation } = req.body;
     console.log('Checkout request:', { id: req.params.id, time_out, work_documentation, user_id: req.user.id });
     
+    const { data: entry, error: entryError } = await supabaseAdmin
+      .from('attendance')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (entryError || !entry) {
+      return res.status(404).json({ error: 'Attendance entry not found.' });
+    }
+
     const { error } = await supabaseAdmin
       .from('attendance')
       .update({ time_out, work_documentation })
@@ -230,6 +278,21 @@ app.put('/api/attendance/checkout/:id', auth, async (req, res) => {
 });
 
 app.put('/api/attendance/overtime-in/:id', auth, async (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+  // Require afternoon checkout to be completed
+  const { data: afternoon, error: afternoonError } = await supabaseAdmin
+    .from('attendance')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .eq('date', today)
+    .order('time_in', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (afternoonError || !afternoon || !afternoon.time_out) {
+    return res.status(400).json({ error: 'Complete afternoon checkout before starting overtime.' });
+  }
+
   const now = new Date();
   const otTimeIn = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
   const { error } = await supabaseAdmin
@@ -460,6 +523,161 @@ app.delete('/api/todos/:id', auth, async (req, res) => {
   
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
+});
+
+// Overtime request endpoints
+app.post('/api/overtime', auth, async (req, res) => {
+  try {
+    const {
+      employee_name,
+      job_position,
+      date_completed,
+      department,
+      periods = [],
+      anticipated_hours,
+      explanation,
+      employee_signature,
+      supervisor_signature,
+      management_signature,
+      approval_date
+    } = req.body;
+
+    if (!employee_name || !job_position) {
+      return res.status(400).json({ error: 'Employee name and job position are required.' });
+    }
+
+    const safePeriods = Array.isArray(periods)
+      ? periods
+          .filter(p => p)
+          .map(p => ({
+            start_date: p.start_date || null,
+            end_date: p.end_date || null,
+            start_time: p.start_time || null,
+            end_time: p.end_time || null
+          }))
+      : [];
+
+    const { data, error } = await supabaseAdmin
+      .from('overtime_requests')
+      .insert({
+        user_id: req.user.id,
+        employee_name,
+        job_position,
+        date_completed: date_completed || new Date().toISOString().split('T')[0],
+        department: department || null,
+        periods: safePeriods,
+        anticipated_hours: anticipated_hours || null,
+        explanation: explanation || null,
+        employee_signature: employee_signature || null,
+        supervisor_signature: supervisor_signature || null,
+        management_signature: management_signature || null,
+        approval_date: approval_date || null
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Overtime insert error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.status(201).json({ success: true, id: data.id });
+  } catch (err) {
+    console.error('Overtime insert exception:', err);
+    res.status(500).json({ error: 'Failed to submit overtime request.' });
+  }
+});
+
+app.get('/api/overtime/my', auth, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('overtime_requests')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Overtime fetch error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error('Overtime fetch exception:', err);
+    res.status(500).json({ error: 'Failed to load overtime requests.' });
+  }
+});
+
+app.get('/api/overtime/all', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator')
+      return res.status(403).json({ error: 'Access denied' });
+
+    const { data, error } = await supabaseAdmin
+      .from('overtime_requests')
+      .select('*, profiles!overtime_requests_user_id_fkey(full_name)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Overtime coordinator fetch error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    const formatted = data.map(item => ({
+      ...item,
+      full_name: item.profiles?.full_name
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    console.error('Overtime coordinator fetch exception:', err);
+    res.status(500).json({ error: 'Failed to load overtime requests.' });
+  }
+});
+
+app.put('/api/overtime/:id/approve', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const {
+      supervisor_signature,
+      management_signature,
+      approval_date
+    } = req.body;
+
+    const { error } = await supabaseAdmin
+      .from('overtime_requests')
+      .update({
+        supervisor_signature: supervisor_signature || null,
+        management_signature: management_signature || null,
+        approval_date: approval_date || new Date().toISOString().split('T')[0]
+      })
+      .eq('id', req.params.id);
+
+    if (error) {
+      console.error('Overtime approval update error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Overtime approval exception:', err);
+    res.status(500).json({ error: 'Failed to update overtime approval.' });
+  }
 });
 
 const PORT = process.env.PORT || 5000;

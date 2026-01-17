@@ -13,8 +13,43 @@ function Dashboard({ token, user, onLogout }) {
   const [userProfile, setUserProfile] = useState(null);
   const [interns, setInterns] = useState([]);
   const [selectedIntern, setSelectedIntern] = useState('all');
-  const [loading, setLoading] = useState(true);
   const [buttonLoading, setButtonLoading] = useState(false);
+  const today = new Date().toISOString().split('T')[0];
+  const todaysOpen = attendance.find(a => a.date === today && !a.time_out);
+  const pendingOlder = attendance.filter(a => !a.time_out && a.date < today);
+  const showOtReminder = (() => {
+    const minutes = new Date().getHours() * 60 + new Date().getMinutes();
+    return minutes >= 14 * 60 + 30 && minutes < 16 * 60;
+  })();
+  const canCheckInNow = () => {
+    const minutes = new Date().getHours() * 60 + new Date().getMinutes();
+    const inMorning = minutes >= 8 * 60 && minutes < 12 * 60;
+    const inAfternoon = minutes >= 13 * 60 && minutes < 17 * 60;
+    const inOvertime = minutes >= 19 * 60 && minutes < 22 * 60;
+    return inMorning || inAfternoon || inOvertime;
+  };
+
+  const parseMinutes = (timeStr) => {
+    if (!timeStr) return null;
+    const [time, meridiem] = timeStr.split(' ');
+    if (!meridiem) return null;
+    let [h, m] = time.split(':').map(Number);
+    if (meridiem === 'PM' && h !== 12) h += 12;
+    if (meridiem === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  const canCheckOutNow = (entry) => {
+    if (!entry || !entry.time_in) return false;
+    const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+    const startMinutes = parseMinutes(entry.time_in);
+    if (startMinutes === null) return false;
+    const isMorning = startMinutes < 12 * 60;
+    if (isMorning) {
+      return nowMinutes >= 12 * 60 && nowMinutes < 17 * 60;
+    }
+    return nowMinutes >= 17 * 60; // afternoon checkout from 5PM onwards
+  };
 
   const showAlert = (type, title, message) => {
     setAlert({ type, title, message });
@@ -78,13 +113,11 @@ function Dashboard({ token, user, onLogout }) {
 
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
       const promises = [fetchAttendance(), fetchUserProfile()];
       if (user.role === 'coordinator') {
         promises.push(fetchInterns());
       }
       await Promise.all(promises);
-      setLoading(false);
     };
     loadData();
     // eslint-disable-next-line
@@ -106,7 +139,14 @@ function Dashboard({ token, user, onLogout }) {
     const { data } = await axios.get(`${API}${endpoint}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    setAttendance(data);
+    const withSession = data.map(entry => {
+      if (!entry.time_in) return { ...entry, session: '-' };
+      const [h] = entry.time_in.split(':');
+      const hourNum = parseInt(h, 10);
+      const session = hourNum < 12 ? 'Morning' : 'Afternoon';
+      return { ...entry, session };
+    });
+    setAttendance(withSession);
   };
 
   const fetchInterns = async () => {
@@ -122,11 +162,14 @@ function Dashboard({ token, user, onLogout }) {
   };
 
   const checkIn = async () => {
-    const today = new Date().toISOString().split('T')[0];
-    const hasCheckedInToday = attendance.some(a => a.date === today && a.time_in);
-    
-    if (hasCheckedInToday) {
-      showAlert('warning', 'Already Checked In', 'You have already checked in today!');
+    if (!canCheckInNow()) {
+      showAlert('error', 'Not available', 'Time In is available 8AM-12PM, 1PM-5PM, and 7PM-10PM for overtime.');
+      return;
+    }
+
+    const todaysEntries = attendance.filter(a => a.date === today);
+    if (todaysEntries.length >= 2) {
+      showAlert('warning', 'Limit Reached', 'You have already completed both check-ins for today.');
       return;
     }
 
@@ -164,6 +207,11 @@ function Dashboard({ token, user, onLogout }) {
   };
 
   const checkOut = async (id) => {
+    if (!canCheckOutNow(todaysOpen)) {
+      showAlert('error', 'Not available', 'Time Out is available 12PM-5PM for morning session, and after 5PM for afternoon session.');
+      return;
+    }
+
     if (!workDoc.trim()) {
       showAlert('error', 'Work Documentation Required', 'Please describe your work before checking out!');
       return;
@@ -270,7 +318,7 @@ function Dashboard({ token, user, onLogout }) {
         {user.role === 'intern' && (
           <div className="intern-grid">
             <div className="checkin-form">
-              <h3>Check In / Out</h3>
+              <h3>Attendance</h3>
               <div style={{marginBottom: '1rem'}}>
                 <label style={{display: 'block', marginBottom: '0.5rem', color: '#a0a4a8', fontSize: '0.9rem'}}>
                   Upload Photo (Required)
@@ -328,108 +376,42 @@ function Dashboard({ token, user, onLogout }) {
                   </label>
                 </div>
               </div>
-              <button 
-                onClick={checkIn}
-                disabled={buttonLoading || (attendance[0] && attendance[0].date === new Date().toISOString().split('T')[0] && attendance[0].time_in)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}
-              >
-                {buttonLoading ? (
-                  <>
-                    <div style={{
-                      width: '16px',
-                      height: '16px',
-                      border: '2px solid transparent',
-                      borderTop: '2px solid white',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }}></div>
-                    Processing...
-                  </>
-                ) : 'Check In'}
-              </button>
-              {attendance[0] && !attendance[0].time_out && attendance[0].date === new Date().toISOString().split('T')[0] && (
-                <button 
-                  onClick={() => checkOut(attendance[0].id)}
-                  disabled={buttonLoading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  {buttonLoading ? (
-                    <>
-                      <div style={{
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid transparent',
-                        borderTop: '2px solid white',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }}></div>
-                      Processing...
-                    </>
-                  ) : 'Check Out'}
-                </button>
-              )}
-              {attendance[0] && attendance[0].time_out && !attendance[0].ot_time_in && attendance[0].date === new Date().toISOString().split('T')[0] && (
-                <button 
-                  onClick={() => overtimeCheckIn(attendance[0].id)}
-                  disabled={buttonLoading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  {buttonLoading ? (
-                    <>
-                      <div style={{
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid transparent',
-                        borderTop: '2px solid white',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }}></div>
-                      Processing...
-                    </>
-                  ) : 'OT Check In'}
-                </button>
-              )}
-              {attendance[0] && attendance[0].ot_time_in && !attendance[0].ot_time_out && attendance[0].date === new Date().toISOString().split('T')[0] && (
-                <button 
-                  onClick={() => overtimeCheckOut(attendance[0].id)}
-                  disabled={buttonLoading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  {buttonLoading ? (
-                    <>
-                      <div style={{
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid transparent',
-                        borderTop: '2px solid white',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }}></div>
-                      Processing...
-                    </>
-                  ) : 'OT Check Out'}
-                </button>
-              )}
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button 
+                    onClick={checkIn}
+                    disabled={
+                      buttonLoading ||
+                      !canCheckInNow() ||
+                      attendance.filter(a => a.date === new Date().toISOString().split('T')[0]).length >= 2
+                    }
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      opacity: !canCheckInNow() ? 0.6 : 1,
+                      cursor: !canCheckInNow() ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {buttonLoading ? (
+                      <>
+                        <div style={{
+                          width: '16px',
+                          height: '16px',
+                          border: '2px solid transparent',
+                          borderTop: '2px solid white',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                        Processing...
+                      </>
+                    ) : 'Time In'}
+                  </button>
+                  {!canCheckInNow() && (
+                    <div style={{ color: '#a0a4a8', fontSize: '0.9rem' }}>
+              </div>
+                  )}
+                </div>
             </div>
 
             <div className="checkin-form">
@@ -441,7 +423,7 @@ function Dashboard({ token, user, onLogout }) {
                 value={workDoc}
                 onChange={(e) => setWorkDoc(e.target.value)}
                 placeholder="Example: Completed database design, attended team meeting, fixed bug #123..."
-                disabled={!attendance[0] || attendance[0].date !== new Date().toISOString().split('T')[0] || attendance[0].time_out}
+                disabled={!todaysOpen}
                 style={{
                   width: '100%',
                   minHeight: '150px',
@@ -453,14 +435,46 @@ function Dashboard({ token, user, onLogout }) {
                   fontSize: '0.9rem',
                   resize: 'vertical',
                   fontFamily: 'inherit',
-                  opacity: (!attendance[0] || attendance[0].date !== new Date().toISOString().split('T')[0] || attendance[0].time_out) ? 0.5 : 1
+                  opacity: todaysOpen ? 1 : 0.5
                 }}
               />
               <p style={{color: '#6b7280', fontSize: '0.8rem', marginTop: '0.5rem'}}>
-                {attendance[0] && !attendance[0].time_out && attendance[0].date === new Date().toISOString().split('T')[0] 
-                  ? 'Required before checking out' 
-                  : 'Check in first to document your work'}
+                    {todaysOpen
+                      ? canCheckOutNow(todaysOpen)
+                        ? 'You can check out now'
+                        : 'Time Out available 12PM-5PM (morning) and after 5PM (afternoon)'
+                      : 'Check in first to document your work'}
               </p>
+              <div style={{ display: 'flex', gap: '20px', marginTop: '1rem', flexWrap: 'wrap' }}>
+                {todaysOpen && (
+                  <button 
+                    onClick={() => checkOut(todaysOpen.id)}
+                    disabled={buttonLoading || !canCheckOutNow(todaysOpen)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      opacity: !canCheckOutNow(todaysOpen) ? 0.6 : 1,
+                      cursor: !canCheckOutNow(todaysOpen) ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {buttonLoading ? (
+                      <>
+                        <div style={{
+                          width: '16px',
+                          height: '16px',
+                          border: '2px solid transparent',
+                          borderTop: '2px solid white',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                        Processing...
+                      </>
+                    ) : 'Time Out'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -497,6 +511,7 @@ function Dashboard({ token, user, onLogout }) {
               <tr>
                 {user.role === 'coordinator' && <th>Intern Name</th>}
                 <th>Date</th>
+                <th>Session</th>
                 <th>Time In</th>
                 <th>Time Out</th>
                 <th>Status</th>
@@ -514,6 +529,7 @@ function Dashboard({ token, user, onLogout }) {
                 <tr key={a.id}>
                   {user.role === 'coordinator' && <td>{a.full_name}</td>}
                   <td>{a.date}</td>
+                  <td>{a.session || '-'}</td>
                   <td>{formatTime(a.time_in)}</td>
                   <td>{formatTime(a.time_out)}</td>
                   <td>

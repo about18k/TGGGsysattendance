@@ -11,6 +11,7 @@ function Profile({ token, user, onLogout }) {
   const [isEditing, setIsEditing] = useState(false);
   const [password, setPassword] = useState({ new: '', confirm: '' });
   const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [totalHours, setTotalHours] = useState(0);
 
   const showAlert = (type, title, message) => {
     setAlert({ type, title, message });
@@ -18,7 +19,56 @@ function Profile({ token, user, onLogout }) {
 
   useEffect(() => {
     fetchProfile();
+    fetchAttendanceHours();
   }, []);
+
+  const parseHours = (timeStr) => {
+    if (!timeStr) return null;
+    const parts = timeStr.trim().split(' ');
+    // Handles "HH:MM AM/PM" and also "HH:MM" or "HH:MM:SS" 24-hour strings
+    if (parts.length === 2) {
+      const [time, meridiem] = parts;
+      let [h, m] = time.split(':').map(Number);
+      if (meridiem.toUpperCase() === 'PM' && h !== 12) h += 12;
+      if (meridiem.toUpperCase() === 'AM' && h === 12) h = 0;
+      return h + m / 60;
+    }
+    // Fallback: assume 24-hour "HH:MM" or "HH:MM:SS"
+    const [hRaw, mRaw] = timeStr.split(':');
+    const h = Number(hRaw);
+    const m = Number(mRaw);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h + m / 60;
+  };
+
+  const fetchAttendanceHours = async () => {
+    try {
+      const { data } = await axios.get(`${API}/attendance/my`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      let total = 0;
+      data.forEach(a => {
+        const start = parseHours(a.time_in);
+        const end = parseHours(a.time_out);
+        if (start !== null && end !== null) {
+          total += Math.max(0, end - start);
+        }
+        if (a.ot_time_in && a.ot_time_out) {
+          const otStart = parseHours(a.ot_time_in);
+          const otEnd = parseHours(a.ot_time_out);
+          if (otStart !== null && otEnd !== null) {
+            total += Math.max(0, otEnd - otStart);
+          }
+        }
+        if (a.late_deduction_hours) {
+          total = Math.max(0, total - a.late_deduction_hours);
+        }
+      });
+      setTotalHours(total);
+    } catch (err) {
+      console.error('Failed to compute total hours', err);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -248,6 +298,28 @@ function Profile({ token, user, onLogout }) {
                   fontSize: '0.9rem'
                 }}
               />
+            </div>
+
+            <div style={{
+              marginBottom: '1.5rem',
+              padding: '1rem',
+              background: '#00273C',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 113, 32, 0.2)',
+              color: '#e8eaed',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '1rem', color: '#e8eaed' }}>Total Hours</h4>
+                <p style={{ margin: 0, color: '#a0a4a8', fontSize: '0.9rem' }}>
+                  Based on attendance, deductions, and overtime.
+                </p>
+              </div>
+              <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#FFB36B' }}>
+                {totalHours.toFixed(2)} hrs
+              </span>
             </div>
 
             <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#00273C', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)' }}>

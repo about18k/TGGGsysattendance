@@ -48,6 +48,42 @@ body {
   border-color: #FF7120;
 }
 
+.header-dropdown-menu {
+  display: block;
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background: #001a2b;
+  border: 1px solid rgba(255, 113, 32, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 180px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 10;
+}
+
+.header-dropdown-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 0.9rem;
+  background: transparent;
+  border: none;
+  color: #e8eaed;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.header-dropdown-menu button:hover,
+.header-dropdown-menu button.active {
+  background: rgba(255, 113, 32, 0.1);
+  color: #ffffff;
+}
+
+.header-dropdown-menu {
+  z-index: 20;
+}
 /* Auth Container - Split Screen Layout */
 .auth-container {
   display: flex;
@@ -496,5 +532,616 @@ tr:hover {
     width: 100% !important;
     padding: 0.65rem 1rem !important;
     font-size: 0.85rem !important;
+  }
+}
+
+/* Overtime form */
+.overtime-card {
+  background: #001f35;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.overtime-heading h2 {
+  color: #ffffff;
+  margin: 0 0 0.25rem 0;
+}
+
+.overtime-heading p {
+  color: #a0a4a8;
+  margin: 0 0 1.5rem 0;
+}
+
+.overtime-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.overtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.overtime-grid .span-3 {
+  grid-column: span 3;
+}
+
+.overtime-field label {
+  display: block;
+  color: #a0a4a8;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+  gap: 10px;
+}
+
+.overtime-field input,
+.overtime-field textarea {
+  width: 100%;
+  padding: 0.75rem;
+  background: #00273C;
+  color: #e8eaed;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.overtime-field textarea {
+  resize: vertical;
+}
+
+.overtime-section {
+  background: #002133;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.overtime-section h4 {
+  color: #ffffff;
+}
+
+.overtime-section-heading {
+  display: flex;
+  justify-content: space-between;
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.75rem;
+}
+
+.overtime-table {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.overtime-table-top,
+.overtime-table-header,
+.overtime-table-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.overtime-table-top div {
+  background: #001a2b;
+  color: #e8eaed;
+  padding: 0.6rem 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.overtime-table-top .span-2 {
+  grid-column: span 2;
+}
+
+.overtime-table-top div:last-child {
+  border-right: none;
+}
+
+.overtime-table-header {
+  background: #001a2b;
+}
+
+.overtime-table-header div {
+  color: #a0a4a8;
+  padding: 0.9rem 0.8rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.overtime-table-header div,
+.overtime-table-row input,
+.overtime-table-row button {
+  box-sizing: border-box;
+}
+
+.overtime-table-row input {
+  width: 100%;
+  border: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.75rem;
+  background: #00273C;
+  color: #e8eaed;
+  font-size: 0.95rem;
+}
+
+
+.overtime-table-row button {
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(255, 157, 92, 0.4);
+  background: #00273C;
+  padding: 0.4rem 0.75rem;
+}
+
+.overtime-remove {
+  background: transparent;
+  color: #ff9d5c;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.overtime-table-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.overtime-table-row input[type="time"] {
+  padding-right: 36px;
+}
+
+.overtime-table-row input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  margin-left: -30px;
+}
+
+.overtime-table-header div:last-child,
+.overtime-table-row > *:last-child {
+  border-right: none;
+}
+
+.overtime-table-row input:last-child {
+  border-right: none;
+}
+
+.overtime-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.overtime-actions {
+  padding: 0.75rem;
+  background: #001a2b;
+  text-align: right;
+}
+
+.overtime-add {
+  background: #FF7120;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.65rem 1.25rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.overtime-instructions {
+  background: #001a2b;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.overtime-instructions h4 {
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+}
+
+.overtime-instructions ul {
+  margin: 0.25rem 0 0 1rem;
+  color: #a0a4a8;
+  line-height: 1.5;
+}
+
+.overtime-submit {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.overtime-submit button {
+  background: #FF7120;
+  color: #ffffff;
+  border: none;
+  padding: 0.9rem 1.6rem;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.overtime-submit button:hover {
+  background: #e66310;
+  transform: translateY(-1px);
+}
+
+.overtime-submit button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1024px) {
+  .overtime-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .overtime-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overtime-grid.hours-explanation {
+    grid-template-columns: 1fr;
+  }
+
+  .overtime-section-heading {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .overtime-table {
+    overflow-x: auto;
+  }
+
+  .overtime-table-top,
+  .overtime-table-header,
+  .overtime-table-row {
+    min-width: 900px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .header > div:last-child {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .dashboard {
+    padding: 1rem;
+  }
+}
+
+/* Overtime form */
+.overtime-wrapper {
+  background: #001f35;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.overtime-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.overtime-header h2 {
+  color: #ffffff;
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.overtime-header p {
+  color: #a0a4a8;
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+}
+
+.overtime-badge {
+  padding: 0.65rem 1rem;
+  background: rgba(255, 113, 32, 0.15);
+  color: #FF7120;
+  border: 1px solid rgba(255, 113, 32, 0.3);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.overtime-card {
+  background: #001a2b;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.overtime-card h3 {
+  color: #ffffff;
+  margin: 0 0 0.5rem;
+}
+
+.overtime-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.overtime-grid.hours-explanation {
+  grid-template-columns: minmax(200px, 1fr) minmax(300px, 2fr);
+}
+
+.overtime-grid.two {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.overtime-grid.three {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.overtime-grid.four {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.field label,
+.block-label {
+  display: block;
+  color: #a0a4a8;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+}
+
+.field input,
+.overtime-card textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #00273C;
+  color: #e8eaed;
+  font-size: 0.95rem;
+}
+
+.overtime-card textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.overtime-row.headers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.overtime-row .subhead {
+  text-align: center;
+  color: #e8eaed;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.overtime-table {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.overtime-table-head,
+.overtime-table-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(140px, 1fr));
+}
+
+.overtime-table-head {
+  background: #001f35;
+  color: #a0a4a8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+}
+
+.overtime-table-head span {
+  padding: 0.85rem 1rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.overtime-table-head span:last-child {
+  border-right: none;
+}
+
+.overtime-table-row input {
+  width: 100%;
+  border: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: #00273C;
+  padding: 0.75rem 1rem;
+  color: #e8eaed;
+}
+
+.overtime-table-row input:last-child {
+  border-right: none;
+}
+
+.overtime-actions {
+  padding: 0.75rem;
+  text-align: right;
+  background: #001f35;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.overtime-actions .ghost,
+.overtime-submit .ghost {
+  background: transparent;
+  color: #FF7120;
+  border: 1px solid rgba(255, 113, 32, 0.35);
+  padding: 0.7rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.overtime-submit {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.overtime-submit button[type="submit"] {
+  padding: 0.85rem 1.5rem;
+  background: #FF7120;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(255, 113, 32, 0.3);
+}
+
+.overtime-card.instructions ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+  color: #e8eaed;
+  line-height: 1.5;
+}
+
+.overtime-card.instructions li {
+  margin-bottom: 0.4rem;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.history-header h3 {
+  color: #ffffff;
+  margin: 0;
+}
+
+.history-count {
+  color: #FF7120;
+  font-weight: 600;
+}
+
+.history-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.history-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: #00273C;
+}
+
+.history-title {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.history-sub {
+  color: #a0a4a8;
+  font-size: 0.9rem;
+}
+
+.history-meta {
+  display: flex;
+  gap: 0.75rem;
+  color: #e8eaed;
+  font-size: 0.9rem;
+  align-items: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Signature pad */
+.signature-pad {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #001a2b;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.signature-pad canvas {
+  width: 100%;
+  height: 140px;
+  background: #001a2b;
+  border: 1px dashed rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  touch-action: none;
+}
+
+.signature-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.signature-hint {
+  color: #a0a4a8;
+  font-size: 0.85rem;
+}
+
+.signature-actions .ghost {
+  background: #ffffff;
+  color: #001a2b;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.signature-actions .ghost:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 900px) {
+  .overtime-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .overtime-row.headers {
+    grid-template-columns: 1fr;
+  }
+
+  .overtime-table-head,
+  .overtime-table-row {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 }

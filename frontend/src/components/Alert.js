@@ -3,10 +3,10 @@ import './Alert.css';
 
 function Alert({ type, title, message, onClose, onConfirm, showCancel }) {
   const icons = {
-    success: '✓',
-    error: '✕',
-    warning: '⚠',
-    info: 'ℹ'
+    success: 'OK',
+    error: 'X',
+    warning: '!',
+    info: 'i'
   };
 
   return (

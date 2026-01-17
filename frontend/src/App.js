@@ -5,6 +5,9 @@ import Dashboard from './Dashboard';
 import Profile from './Profile';
 import TodoList from './TodoList';
 import Reports from './Reports';
+import OvertimeForm from './OvertimeForm';
+import OvertimeStatus from './OvertimeStatus';
+import OvertimeRequests from './OvertimeRequests';
 import './App.css';
 
 function App() {
@@ -16,6 +19,9 @@ function App() {
   );
   const [currentPage, setCurrentPage] = useState(localStorage.getItem('currentPage') || 'dashboard');
   const [userProfile, setUserProfile] = useState(null);
+  const [showOvertimeMenu, setShowOvertimeMenu] = useState(false);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     if (token) {
@@ -25,6 +31,43 @@ function App() {
       return () => clearInterval(interval);
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const loadNotifications = async () => {
+      try {
+        const { data } = await axios.get('http://localhost:5000/api/attendance/my', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const today = new Date().toISOString().split('T')[0];
+        const pendingCheckouts = data.filter(a => !a.time_out && a.date < today);
+        const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+        const otReminder = nowMinutes >= 14 * 60 + 30 && nowMinutes < 16 * 60;
+
+        const items = [];
+        if (pendingCheckouts.length > 0) {
+          items.push({
+            id: 'pending-checkout',
+            title: 'Pending checkouts',
+            detail: `${pendingCheckouts.length} older check-in(s) need checkout`
+          });
+        }
+        if (otReminder && user.role === 'intern') {
+          items.push({
+            id: 'ot-reminder',
+            title: 'OT reminder',
+            detail: 'Submit overtime between 3:00 PM and 4:00 PM.'
+          });
+        }
+        setNotifications(items);
+      } catch (err) {
+        console.error('Notification load failed', err);
+      }
+    };
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [token, user.role]);
 
   const checkTokenValidity = async () => {
     try {
@@ -70,6 +113,7 @@ function App() {
   const changePage = (page) => {
     setCurrentPage(page);
     localStorage.setItem('currentPage', page);
+    if (showOvertimeMenu) setShowOvertimeMenu(false);
   };
 
   if (!token) {
@@ -84,6 +128,12 @@ function App() {
         return <TodoList token={token} />;
       case 'reports':
         return <Reports token={token} />;
+      case 'overtime-requests':
+        return <OvertimeRequests token={token} />;
+      case 'overtime-status':
+        return <OvertimeStatus token={token} />;
+      case 'overtime':
+        return <OvertimeForm token={token} user={user} />;
       default:
         return <Dashboard token={token} user={user} onLogout={handleLogout} />;
     }
@@ -117,6 +167,58 @@ function App() {
             Dashboard
           </button>
           {user.role === 'intern' && (
+            <div style={{ position: 'relative' }} className="header-dropdown">
+              <button 
+                onClick={() => setShowOvertimeMenu(prev => !prev)}
+                style={{
+                  background: (currentPage === 'overtime' || currentPage === 'overtime-status') ? '#FF7120' : 'transparent',
+                  color: (currentPage === 'overtime' || currentPage === 'overtime-status') ? 'white' : '#FF7120',
+                  border: '1px solid rgba(255, 113, 32, 0.3)',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Overtime ▾
+              </button>
+              {showOvertimeMenu && (
+                <div className="header-dropdown-menu">
+                  <button
+                    onClick={() => changePage('overtime')}
+                    className={currentPage === 'overtime' ? 'active' : ''}
+                  >
+                    Overtime Form
+                  </button>
+                  <button
+                    onClick={() => changePage('overtime-status')}
+                    className={currentPage === 'overtime-status' ? 'active' : ''}
+                  >
+                    OT Request Status
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {user.role === 'coordinator' && (
+            <button 
+              onClick={() => changePage('overtime-requests')}
+              style={{
+                background: currentPage === 'overtime-requests' ? '#FF7120' : 'transparent',
+                color: currentPage === 'overtime-requests' ? 'white' : '#FF7120',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                transition: 'all 0.2s'
+              }}
+            >
+              Overtime Requests
+            </button>
+          )}
+          {user.role === 'intern' && (
             <button 
               onClick={() => changePage('todos')}
               style={{
@@ -132,6 +234,59 @@ function App() {
             >
               Todo List
             </button>
+          )}
+          {user.role === 'intern' && (
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowNotifMenu(prev => !prev)}
+                title="Notifications"
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  border: '1px solid rgba(255, 113, 32, 0.3)',
+                  background: 'rgba(255, 113, 32, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FF7120',
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  position: 'relative'
+                }}
+              >
+                🔔
+                {notifications.length > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-4px',
+                    background: '#FF7120',
+                    color: '#ffffff',
+                    borderRadius: '999px',
+                    padding: '0 6px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    lineHeight: '18px',
+                    border: '1px solid rgba(0,0,0,0.15)'
+                  }}>{notifications.length}</span>
+                )}
+              </button>
+              {showNotifMenu && (
+                <div className="header-dropdown-menu" style={{ right: '-60px', minWidth: '240px' }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: '0.75rem 1rem', color: '#a0a4a8' }}>No notifications</div>
+                  ) : (
+                    notifications.map(item => (
+                      <div key={item.id} style={{ padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#e8eaed' }}>
+                        <div style={{ fontWeight: '700', marginBottom: '4px' }}>{item.title}</div>
+                        <div style={{ fontSize: '0.9rem', color: '#a0a4a8' }}>{item.detail}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {user.role === 'coordinator' && (
             <button 
