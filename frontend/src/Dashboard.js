@@ -19,6 +19,14 @@ function Dashboard({ token, user, onLogout }) {
   const todaysOpen = attendance.find(a => a.date === today && !a.time_out);
   const todaysEntries = attendance.filter(a => a.date === today);
   
+  // Debug logging
+  useEffect(() => {
+    console.log('DEBUG - Today:', today);
+    console.log('DEBUG - Attendance data:', attendance);
+    console.log('DEBUG - Todays entries:', todaysEntries);
+    console.log('DEBUG - Todays open session:', todaysOpen);
+  }, [attendance, today, todaysEntries, todaysOpen]);
+  
   const canCheckInNow = () => {
     const minutes = new Date().getHours() * 60 + new Date().getMinutes();
     const inMorning = minutes >= 5 * 60 && minutes < 12 * 60;
