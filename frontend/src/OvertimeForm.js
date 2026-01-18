@@ -10,7 +10,7 @@ function OvertimeForm({ token }) {
   const [alert, setAlert] = useState(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [periods, setPeriods] = useState(
-    Array.from({ length: 1 }).map(() => ({
+    Array.from({ length: 6 }).map(() => ({
       start_date: '',
       end_date: '',
       start_time: '',
