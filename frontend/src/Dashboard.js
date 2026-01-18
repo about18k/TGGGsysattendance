@@ -11,6 +11,7 @@ function Dashboard({ token, user, onLogout }) {
   const [workDoc, setWorkDoc] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [modalDoc, setModalDoc] = useState(null);
+  const [fullscreenPhoto, setFullscreenPhoto] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [interns, setInterns] = useState([]);
   const [selectedIntern, setSelectedIntern] = useState('all');
@@ -668,7 +669,13 @@ function Dashboard({ token, user, onLogout }) {
                   </td>
                   <td>
                     {a.photo_path && (
-                      <img src={a.photo_path} alt="Attendance" className="photo-thumb" />
+                      <img 
+                        src={a.photo_path} 
+                        alt="Attendance" 
+                        className="photo-thumb" 
+                        onClick={() => setFullscreenPhoto(a.photo_path)}
+                        style={{ cursor: 'pointer' }}
+                      />
                     )}
                   </td>
                 </tr>
@@ -720,6 +727,57 @@ function Dashboard({ token, user, onLogout }) {
               Close
             </button>
           </div>
+        </div>
+      )}
+
+      {fullscreenPhoto && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '2rem'
+          }}
+          onClick={() => setFullscreenPhoto(null)}
+        >
+          <img 
+            src={fullscreenPhoto} 
+            alt="Fullscreen" 
+            style={{
+              maxWidth: '90%',
+              maxHeight: '90%',
+              objectFit: 'contain',
+              borderRadius: '8px'
+            }}
+          />
+          <button 
+            onClick={() => setFullscreenPhoto(null)}
+            style={{
+              position: 'absolute',
+              top: '1rem',
+              right: '1rem',
+              background: '#FF7120',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50%',
+              width: '40px',
+              height: '40px',
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
     </div>
