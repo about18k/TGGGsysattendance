@@ -84,11 +84,17 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/signup', async (req, res) => {
   const { name, email, password } = req.body;
   
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // Use admin client to create user with auto-confirmation
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true // Auto-confirm email
+  });
+  
   if (error) return res.status(400).json({ error: error.message });
   
   if (data.user) {
-    // Use service role to bypass RLS during initial profile creation
+    // Create profile for the new user
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert({ 
