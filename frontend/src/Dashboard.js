@@ -72,7 +72,7 @@ function Dashboard({ token, user, onLogout }) {
     if (startMinutes === null) return false;
     const isMorning = startMinutes < 12 * 60;
     if (isMorning) {
-      return nowMinutes >= 12 * 60 && nowMinutes < 17 * 60;
+      return nowMinutes >= 12 * 60; // Can checkout from 12PM onwards for morning
     }
     return nowMinutes >= 17 * 60; // afternoon checkout from 5PM onwards
   };
