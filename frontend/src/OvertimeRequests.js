@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import Alert from './components/Alert';
+import { TableSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -8,6 +9,7 @@ function OvertimeRequests({ token }) {
   const [requests, setRequests] = useState([]);
   const [selected, setSelected] = useState(null);
   const [alert, setAlert] = useState(null);
+  const [loading, setLoading] = useState(true);
   const supervisorPadRef = useRef(null);
   const managementPadRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState({ supervisor: false, management: false });
@@ -19,6 +21,7 @@ function OvertimeRequests({ token }) {
   }, []);
 
   const load = async () => {
+    setLoading(true);
     try {
       const { data } = await axios.get(`${API}/overtime/all`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -30,6 +33,8 @@ function OvertimeRequests({ token }) {
         title: 'Load failed',
         message: err.response?.data?.error || 'Could not load overtime requests.'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -134,6 +139,9 @@ function OvertimeRequests({ token }) {
         <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <h3 style={{ margin: 0 }}>All Requests</h3>
         </div>
+        {loading ? (
+          <TableSkeleton />
+        ) : (
         <div className="table-wrapper">
           <table>
             <thead>
@@ -166,6 +174,7 @@ function OvertimeRequests({ token }) {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {selected && (

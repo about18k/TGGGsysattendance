@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Alert from './components/Alert';
+import { TableSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 function OvertimeStatus({ token }) {
   const [requests, setRequests] = useState([]);
   const [alert, setAlert] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
       try {
         const { data } = await axios.get(`${API}/overtime/my`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -21,6 +24,8 @@ function OvertimeStatus({ token }) {
           title: 'Load failed',
           message: err.response?.data?.error || 'Could not load OT requests.'
         });
+      } finally {
+        setLoading(false);
       }
     };
     load();
@@ -44,6 +49,9 @@ function OvertimeStatus({ token }) {
         <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <h3 style={{ margin: 0 }}>My OT Requests</h3>
         </div>
+        {loading ? (
+          <TableSkeleton />
+        ) : (
         <div className="table-wrapper">
           <table>
             <thead>
@@ -84,6 +92,7 @@ function OvertimeStatus({ token }) {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

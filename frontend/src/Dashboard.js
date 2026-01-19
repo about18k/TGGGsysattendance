@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Alert from './components/Alert';
+import { TableSkeleton, CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -16,6 +17,7 @@ function Dashboard({ token, user, onLogout }) {
   const [interns, setInterns] = useState([]);
   const [selectedIntern, setSelectedIntern] = useState('all');
   const [buttonLoading, setButtonLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const today = new Date().toISOString().split('T')[0];
   const todaysOpen = attendance.find(a => a.date === today && !a.time_out);
   const todaysEntries = attendance.filter(a => a.date === today);
@@ -137,11 +139,13 @@ function Dashboard({ token, user, onLogout }) {
 
   useEffect(() => {
     const loadData = async () => {
+      setLoading(true);
       const promises = [fetchAttendance(), fetchUserProfile()];
       if (user.role === 'coordinator') {
         promises.push(fetchInterns());
       }
       await Promise.all(promises);
+      setLoading(false);
     };
     loadData();
     // eslint-disable-next-line
@@ -329,6 +333,12 @@ function Dashboard({ token, user, onLogout }) {
         </div>
 
         {user.role === 'intern' && (
+          loading ? (
+            <div className="intern-grid">
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
           <div className="intern-grid">
             <div className="checkin-form">
               <h3>Attendance</h3>
@@ -547,6 +557,7 @@ function Dashboard({ token, user, onLogout }) {
               </div>
             </div>
           </div>
+          )
         )}
 
         <div className="attendance-table">
@@ -576,6 +587,9 @@ function Dashboard({ token, user, onLogout }) {
             )}
           </div>
           <div className="table-wrapper">
+            {loading ? (
+              <TableSkeleton />
+            ) : (
             <table>
             <thead>
               <tr>
@@ -682,6 +696,7 @@ function Dashboard({ token, user, onLogout }) {
               ))}
             </tbody>
           </table>
+            )}
           </div>
         </div>
       </div>

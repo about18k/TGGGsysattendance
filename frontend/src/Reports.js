@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -117,9 +118,7 @@ function Reports({ token }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
         {loading ? (
-          <div className="checkin-form">
-            <p style={{ textAlign: 'center', color: '#6b7280' }}>Loading interns...</p>
-          </div>
+          [...Array(6)].map((_, i) => <CardSkeleton key={i} />)
         ) : interns.length === 0 ? (
           <div className="checkin-form">
             <p style={{ textAlign: 'center', color: '#6b7280' }}>No interns found. Make sure you're logged in as a coordinator.</p>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Alert from './components/Alert';
+import { CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -12,14 +13,19 @@ function Profile({ token, user, onLogout }) {
   const [password, setPassword] = useState({ new: '', confirm: '' });
   const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [totalHours, setTotalHours] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   const showAlert = (type, title, message) => {
     setAlert({ type, title, message });
   };
 
   useEffect(() => {
-    fetchProfile();
-    fetchAttendanceHours();
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchProfile(), fetchAttendanceHours()]);
+      setLoading(false);
+    };
+    loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -162,6 +168,9 @@ function Profile({ token, user, onLogout }) {
 
       <div className="dashboard">
         <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+          {loading ? (
+            <CardSkeleton />
+          ) : (
           <div className="checkin-form">
             <h3>Profile Information</h3>
             
@@ -493,6 +502,7 @@ function Profile({ token, user, onLogout }) {
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

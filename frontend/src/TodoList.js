@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -8,6 +9,7 @@ function TodoList({ token }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dateTask, setDateTask] = useState('');
+  const [loading, setLoading] = useState(true);
   const itemsPerPage = 5;
 
   useEffect(() => {
@@ -20,10 +22,15 @@ function TodoList({ token }) {
   }, [selectedDate]);
 
   const fetchTodos = async () => {
-    const { data } = await axios.get(`${API}/todos`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    setTodos(data);
+    setLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/todos`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTodos(data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addDateTodo = async (e) => {
@@ -173,133 +180,139 @@ function TodoList({ token }) {
         </div>
 
         <div className="checkin-form todo-main" style={{flex: '1 1 400px', order: 3, boxSizing: 'border-box'}}>
-        <h3>Tasks for {selectedDate.toLocaleDateString()}</h3>
-        <form onSubmit={addDateTodo} className="todo-form" style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem'}}>
-          <input
-            type="text"
-            value={dateTask}
-            onChange={(e) => setDateTask(e.target.value)}
-            placeholder="Enter your task..."
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              background: '#00273C',
-              color: '#e8eaed',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '8px',
-              fontSize: '0.9rem'
-            }}
-          />
-          <button type="submit" className="todo-add-btn" style={{width: '100%', padding: '0.75rem'}}>Add Task</button>
-        </form>
-
-        <div>
-          {filteredTodos.length === 0 ? (
-            <p style={{textAlign: 'center', color: '#6b7280', padding: '2rem'}}>
-              No tasks for this date. Add your first task above!
-            </p>
-          ) : (
-            <>
-            {filteredTodos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(todo => (
-              <div
-                key={todo.id}
+        {loading ? (
+          <CardSkeleton />
+        ) : (
+          <>
+            <h3>Tasks for {selectedDate.toLocaleDateString()}</h3>
+            <form onSubmit={addDateTodo} className="todo-form" style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem'}}>
+              <input
+                type="text"
+                value={dateTask}
+                onChange={(e) => setDateTask(e.target.value)}
+                placeholder="Enter your task..."
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.75rem',
-                  padding: '1rem',
+                  width: '100%',
+                  padding: '0.75rem',
                   background: '#00273C',
+                  color: '#e8eaed',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   borderRadius: '8px',
-                  marginBottom: '0.75rem',
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                  fontSize: '0.9rem'
                 }}
-              >
-                <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-                  <input
-                    type="checkbox"
-                    checked={todo.completed}
-                    onChange={() => toggleTodo(todo.id, todo.completed)}
+              />
+              <button type="submit" className="todo-add-btn" style={{width: '100%', padding: '0.75rem'}}>Add Task</button>
+            </form>
+
+            <div>
+              {filteredTodos.length === 0 ? (
+                <p style={{textAlign: 'center', color: '#6b7280', padding: '2rem'}}>
+                  No tasks for this date. Add your first task above!
+                </p>
+              ) : (
+                <>
+                {filteredTodos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(todo => (
+                  <div
+                    key={todo.id}
                     style={{
-                      width: '20px',
-                      height: '20px',
-                      cursor: 'pointer',
-                      accentColor: '#FF7120',
-                      flexShrink: 0
-                    }}
-                  />
-                  <span
-                    style={{
-                      flex: 1,
-                      color: todo.completed ? '#6b7280' : '#e8eaed',
-                      textDecoration: todo.completed ? 'line-through' : 'none',
-                      fontSize: '0.95rem',
-                      wordBreak: 'break-word'
-                    }}
-                  >
-                    {todo.task.replace(/\[.*?\]\s*/, '')}
-                  </span>
-                </div>
-                <button
-                  onClick={() => deleteTodo(todo.id)}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255, 113, 32, 0.3)',
-                    color: '#FF7120',
-                    padding: '0.65rem 1rem',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    width: '100%'
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
-            {filteredTodos.length > itemsPerPage && (
-              <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem'}}>
-                <div style={{display: 'flex', gap: '0.5rem'}}>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    style={{
-                      flex: 1,
-                      background: currentPage === 1 ? 'transparent' : '#FF7120',
-                      color: currentPage === 1 ? '#6b7280' : 'white',
-                      border: '1px solid rgba(255, 113, 32, 0.3)',
-                      padding: '0.65rem 1rem',
-                      borderRadius: '6px',
-                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                      fontSize: '0.85rem'
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                      padding: '1rem',
+                      background: '#00273C',
+                      borderRadius: '8px',
+                      marginBottom: '0.75rem',
+                      border: '1px solid rgba(255, 255, 255, 0.1)'
                     }}
                   >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredTodos.length / itemsPerPage), p + 1))}
-                    disabled={currentPage === Math.ceil(filteredTodos.length / itemsPerPage)}
-                    style={{
-                      flex: 1,
-                      background: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? 'transparent' : '#FF7120',
-                      color: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? '#6b7280' : 'white',
-                      border: '1px solid rgba(255, 113, 32, 0.3)',
-                      padding: '0.65rem 1rem',
-                      borderRadius: '6px',
-                      cursor: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? 'not-allowed' : 'pointer',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    Next
-                  </button>
-                </div>
-                <span style={{textAlign: 'center', padding: '0.5rem', color: '#e8eaed', fontSize: '0.9rem'}}>
-                  Page {currentPage} of {Math.ceil(filteredTodos.length / itemsPerPage)}
-                </span>
-              </div>
-            )}
-            </>
-          )}
-        </div>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                      <input
+                        type="checkbox"
+                        checked={todo.completed}
+                        onChange={() => toggleTodo(todo.id, todo.completed)}
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          cursor: 'pointer',
+                          accentColor: '#FF7120',
+                          flexShrink: 0
+                        }}
+                      />
+                      <span
+                        style={{
+                          flex: 1,
+                          color: todo.completed ? '#6b7280' : '#e8eaed',
+                          textDecoration: todo.completed ? 'line-through' : 'none',
+                          fontSize: '0.95rem',
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        {todo.task.replace(/\[.*?\]\s*/, '')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => deleteTodo(todo.id)}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(255, 113, 32, 0.3)',
+                        color: '#FF7120',
+                        padding: '0.65rem 1rem',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        width: '100%'
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+                {filteredTodos.length > itemsPerPage && (
+                  <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem'}}>
+                    <div style={{display: 'flex', gap: '0.5rem'}}>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          flex: 1,
+                          background: currentPage === 1 ? 'transparent' : '#FF7120',
+                          color: currentPage === 1 ? '#6b7280' : 'white',
+                          border: '1px solid rgba(255, 113, 32, 0.3)',
+                          padding: '0.65rem 1rem',
+                          borderRadius: '6px',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredTodos.length / itemsPerPage), p + 1))}
+                        disabled={currentPage === Math.ceil(filteredTodos.length / itemsPerPage)}
+                        style={{
+                          flex: 1,
+                          background: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? 'transparent' : '#FF7120',
+                          color: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? '#6b7280' : 'white',
+                          border: '1px solid rgba(255, 113, 32, 0.3)',
+                          padding: '0.65rem 1rem',
+                          borderRadius: '6px',
+                          cursor: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? 'not-allowed' : 'pointer',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <span style={{textAlign: 'center', padding: '0.5rem', color: '#e8eaed', fontSize: '0.9rem'}}>
+                      Page {currentPage} of {Math.ceil(filteredTodos.length / itemsPerPage)}
+                    </span>
+                  </div>
+                )}
+                </>
+              )}
+            </div>
+          </>
+        )}
         </div>
       </div>
     </div>
