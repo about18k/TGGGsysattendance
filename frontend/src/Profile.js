@@ -55,13 +55,27 @@ function Profile({ token, user, onLogout }) {
       });
       let total = 0;
       data.forEach(a => {
-        const start = parseHours(a.time_in);
-        const end = parseHours(a.time_out);
         let sessionHours = 0;
         
-        // Calculate actual hours worked for this session
-        if (start !== null && end !== null) {
-          sessionHours = Math.max(0, end - start);
+        // Only count completed sessions (has both time_in and time_out)
+        if (a.time_in && a.time_out) {
+          const start = parseHours(a.time_in);
+          const end = parseHours(a.time_out);
+          
+          if (start !== null && end !== null) {
+            // Morning session: 8:00 AM - 12:00 PM
+            if (start < 12) {
+              const effectiveEnd = Math.min(end, 12);
+              // If On-Time, give full 4 hours. If Late, deduction already applied.
+              sessionHours = Math.max(0, effectiveEnd - 8);
+            } 
+            // Afternoon session: 1:00 PM - 5:00 PM
+            else {
+              const effectiveEnd = Math.min(end, 17);
+              // If On-Time, give full 4 hours. If Late, deduction already applied.
+              sessionHours = Math.max(0, effectiveEnd - 13);
+            }
+          }
         }
         
         // Subtract late deduction for this session
@@ -71,12 +85,14 @@ function Profile({ token, user, onLogout }) {
         
         total += sessionHours;
         
-        // Add overtime hours if present
+        // Add overtime hours (7:00 PM - 10:00 PM)
         if (a.ot_time_in && a.ot_time_out) {
           const otStart = parseHours(a.ot_time_in);
           const otEnd = parseHours(a.ot_time_out);
           if (otStart !== null && otEnd !== null) {
-            total += Math.max(0, otEnd - otStart);
+            const effectiveOtStart = Math.max(otStart, 19);
+            const effectiveOtEnd = Math.min(otEnd, 22);
+            total += Math.max(0, effectiveOtEnd - effectiveOtStart);
           }
         }
       });

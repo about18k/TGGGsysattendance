@@ -73,19 +73,46 @@ function Reports({ token }) {
 
   const calculateStats = (internId) => {
     const internAttendance = allAttendance.filter(a => a.user_id === internId);
-    const total = internAttendance.length;
+    
+    // Count unique dates instead of total records
+    const uniqueDates = new Set(internAttendance.map(a => a.date));
+    const total = uniqueDates.size;
+    
     const onTime = internAttendance.filter(a => a.status === 'On-Time').length;
     const late = internAttendance.filter(a => a.status === 'Late').length;
     const totalLateHours = internAttendance.reduce((sum, a) => sum + (a.late_deduction_hours || 0), 0);
     
-    // Calculate actual hours worked from time_in and time_out
+    // Calculate hours worked within official work periods
     let totalMinutes = 0;
     internAttendance.forEach(record => {
+      // Only count completed sessions (has both time_in and time_out)
       if (record.time_in && record.time_out) {
         const inMinutes = parseTime(record.time_in);
         const outMinutes = parseTime(record.time_out);
+        
         if (inMinutes !== null && outMinutes !== null) {
-          totalMinutes += (outMinutes - inMinutes);
+          // Morning session: 8:00 AM - 12:00 PM
+          if (inMinutes < 12 * 60) {
+            const effectiveEnd = Math.min(outMinutes, 12 * 60);
+            // Give full hours from 8 AM. Late deduction already applied.
+            totalMinutes += Math.max(0, effectiveEnd - (8 * 60));
+          }
+          // Afternoon session: 1:00 PM - 5:00 PM
+          else {
+            const effectiveEnd = Math.min(outMinutes, 17 * 60);
+            // Give full hours from 1 PM. Late deduction already applied.
+            totalMinutes += Math.max(0, effectiveEnd - (13 * 60));
+          }
+        }
+      }
+      // Add overtime hours (7:00 PM - 10:00 PM)
+      if (record.ot_time_in && record.ot_time_out) {
+        const otInMinutes = parseTime(record.ot_time_in);
+        const otOutMinutes = parseTime(record.ot_time_out);
+        if (otInMinutes !== null && otOutMinutes !== null) {
+          const effectiveOtStart = Math.max(otInMinutes, 19 * 60);
+          const effectiveOtEnd = Math.min(otOutMinutes, 22 * 60);
+          totalMinutes += Math.max(0, effectiveOtEnd - effectiveOtStart);
         }
       }
     });
