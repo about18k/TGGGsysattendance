@@ -27,11 +27,10 @@ function Dashboard({ token, user, onLogout }) {
   const getPhilippinesDate = () => {
     const now = new Date();
     const phTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
-    const isoDate = phTime.toISOString().split('T')[0];
-    console.log('DEBUG getPhilippinesDate - now:', now);
-    console.log('DEBUG getPhilippinesDate - phTime:', phTime);
-    console.log('DEBUG getPhilippinesDate - isoDate:', isoDate);
-    return isoDate;
+    const year = phTime.getFullYear();
+    const month = String(phTime.getMonth() + 1).padStart(2, '0');
+    const day = String(phTime.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
   
   const getPhilippinesTime = () => {
