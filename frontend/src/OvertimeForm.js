@@ -11,14 +11,14 @@ function OvertimeForm({ token }) {
   const [alert, setAlert] = useState(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [periods, setPeriods] = useState(
-    Array.from({ length: 6 }).map(() => ({
+  const [periods, setPeriods] = useState([
+    {
       start_date: '',
       end_date: '',
       start_time: '',
       end_time: ''
-    }))
-  );
+    }
+  ]);
   const [form, setForm] = useState({
     employee_name: '',
     job_position: '',
@@ -88,12 +88,12 @@ function OvertimeForm({ token }) {
       });
       setAlert({ type: 'success', title: 'Submitted', message: 'Overtime request submitted successfully.' });
       // fully reset form and periods
-      setPeriods(Array.from({ length: 6 }).map(() => ({
+      setPeriods([{
         start_date: '',
         end_date: '',
         start_time: '',
         end_time: ''
-      })));
+      }]);
       setForm({
         employee_name: '',
         job_position: '',
@@ -251,7 +251,7 @@ function OvertimeForm({ token }) {
                       Remove
                     </button>
                   </div>
-                  <div style={{display: 'grid', gridTemplateColumns: '1fr', gap: '0.75rem'}}>
+                  <div style={{display: 'grid', gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : '1fr 1fr', gap: '0.75rem'}}>
                     <div>
                       <label style={{display: 'block', color: '#a0a4a8', marginBottom: '0.4rem', fontSize: '0.85rem'}}>Start Date</label>
                       <input

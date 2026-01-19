@@ -590,8 +590,20 @@ tr:hover {
   gap: 1rem;
 }
 
+@media (max-width: 768px) {
+  .overtime-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 .overtime-grid .span-3 {
   grid-column: span 3;
+}
+
+@media (max-width: 768px) {
+  .overtime-grid .span-3 {
+    grid-column: span 1;
+  }
 }
 
 .overtime-field label {
@@ -921,6 +933,12 @@ tr:hover {
 
 .overtime-grid.hours-explanation {
   grid-template-columns: minmax(200px, 1fr) minmax(300px, 2fr);
+}
+
+@media (max-width: 768px) {
+  .overtime-grid.hours-explanation {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 .overtime-grid.two {

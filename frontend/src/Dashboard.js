@@ -18,6 +18,10 @@ function Dashboard({ token, user, onLogout }) {
   const [selectedIntern, setSelectedIntern] = useState('all');
   const [buttonLoading, setButtonLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [filterSession, setFilterSession] = useState('all');
+  const [filterDate, setFilterDate] = useState('');
   
   // Get current date/time in Philippines timezone (UTC+8)
   const getPhilippinesDate = () => {
@@ -57,7 +61,7 @@ function Dashboard({ token, user, onLogout }) {
     const phTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
     const minutes = phTime.getHours() * 60 + phTime.getMinutes();
     const inMorning = minutes >= 5 * 60 && minutes < 12 * 60;
-    const inAfternoon = minutes >= 13 * 60 && minutes < 17 * 60;
+    const inAfternoon = minutes >= (12 * 60 + 40) && minutes < 17 * 60; // 12:40 PM to 5 PM
     const inOvertime = minutes >= 19 * 60 && minutes < 22 * 60;
     
     // Check if already checked in for current session
@@ -222,7 +226,7 @@ function Dashboard({ token, user, onLogout }) {
     }
 
     if (!canCheckInNow()) {
-      showAlert('error', 'Not available', 'Time In is available 5AM-12PM (counted 8AM-12PM), 1PM-5PM, and 7PM-10PM for overtime.');
+      showAlert('error', 'Not available', 'Time In is available 5AM-12PM (counted 8AM-12PM), 12:40PM-5PM, and 7PM-10PM for overtime.');
       return;
     }
 
@@ -457,7 +461,7 @@ function Dashboard({ token, user, onLogout }) {
                   </button>
                   {!canCheckInNow() && (
                     <div style={{ color: '#a0a4a8', fontSize: '0.9rem' }}>
-                      Time In available 5AM-12PM (counted 8AM-12PM), 1PM-5PM, and 7PM-10PM (overtime).
+                      Time In available 5AM-12PM (counted 8AM-12PM), 12:40PM-5PM, and 7PM-10PM (overtime).
                     </div>
                   )}
                 </div>
@@ -586,12 +590,34 @@ function Dashboard({ token, user, onLogout }) {
         )}
 
         <div className="attendance-table">
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.75rem 2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)'}}>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.75rem 2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', flexWrap: 'wrap', gap: '1rem'}}>
             <h3 style={{margin: 0}}>{user.role === 'coordinator' ? 'All Interns Attendance' : 'My Attendance History'}</h3>
-            {user.role === 'coordinator' && (
+            <div style={{display: 'flex', gap: '0.75rem', flexWrap: 'wrap'}}>
+              {user.role === 'coordinator' && (
+                <select
+                  value={selectedIntern}
+                  onChange={(e) => setSelectedIntern(e.target.value)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: '#00273C',
+                    color: '#e8eaed',
+                    border: '1px solid rgba(255, 113, 32, 0.3)',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="all">All Interns</option>
+                  {interns.map(intern => (
+                    <option key={intern.id} value={intern.id}>
+                      {intern.full_name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <select
-                value={selectedIntern}
-                onChange={(e) => setSelectedIntern(e.target.value)}
+                value={filterSession}
+                onChange={(e) => setFilterSession(e.target.value)}
                 style={{
                   padding: '0.5rem 1rem',
                   background: '#00273C',
@@ -602,19 +628,51 @@ function Dashboard({ token, user, onLogout }) {
                   cursor: 'pointer'
                 }}
               >
-                <option value="all">All Interns</option>
-                {interns.map(intern => (
-                  <option key={intern.id} value={intern.id}>
-                    {intern.full_name}
-                  </option>
-                ))}
+                <option value="all">All Sessions</option>
+                <option value="Morning">Morning</option>
+                <option value="Afternoon">Afternoon</option>
               </select>
-            )}
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: '#00273C',
+                  color: '#e8eaed',
+                  border: '1px solid rgba(255, 113, 32, 0.3)',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}
+              />
+              {(filterSession !== 'all' || filterDate) && (
+                <button
+                  onClick={() => {
+                    setFilterSession('all');
+                    setFilterDate('');
+                  }}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: 'rgba(255, 113, 32, 0.2)',
+                    color: '#FF7120',
+                    border: '1px solid rgba(255, 113, 32, 0.3)',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
           </div>
           <div className="table-wrapper">
             {loading ? (
               <TableSkeleton />
             ) : (
+            <>
             <table>
             <thead>
               <tr>
@@ -635,6 +693,9 @@ function Dashboard({ token, user, onLogout }) {
             <tbody>
               {attendance
                 .filter(a => selectedIntern === 'all' || a.user_id === selectedIntern)
+                .filter(a => filterSession === 'all' || a.session === filterSession)
+                .filter(a => !filterDate || a.date === filterDate)
+                .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                 .map((a) => (
                 <tr key={a.id}>
                   {user.role === 'coordinator' && <td>{a.full_name}</td>}
@@ -721,6 +782,49 @@ function Dashboard({ token, user, onLogout }) {
               ))}
             </tbody>
           </table>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1.5rem',
+            borderTop: '1px solid rgba(255, 255, 255, 0.06)'
+          }}>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '0.5rem 1rem',
+                background: currentPage === 1 ? 'rgba(255, 113, 32, 0.3)' : '#FF7120',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              Previous
+            </button>
+            <span style={{ color: '#e8eaed', fontSize: '0.9rem' }}>
+              Page {currentPage} of {Math.ceil(attendance.filter(a => selectedIntern === 'all' || a.user_id === selectedIntern).filter(a => filterSession === 'all' || a.session === filterSession).filter(a => !filterDate || a.date === filterDate).length / itemsPerPage) || 1}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => p + 1)}
+              disabled={currentPage >= Math.ceil(attendance.filter(a => selectedIntern === 'all' || a.user_id === selectedIntern).filter(a => filterSession === 'all' || a.session === filterSession).filter(a => !filterDate || a.date === filterDate).length / itemsPerPage)}
+              style={{
+                padding: '0.5rem 1rem',
+                background: currentPage >= Math.ceil(attendance.filter(a => selectedIntern === 'all' || a.user_id === selectedIntern).filter(a => filterSession === 'all' || a.session === filterSession).filter(a => !filterDate || a.date === filterDate).length / itemsPerPage) ? 'rgba(255, 113, 32, 0.3)' : '#FF7120',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: currentPage >= Math.ceil(attendance.filter(a => selectedIntern === 'all' || a.user_id === selectedIntern).filter(a => filterSession === 'all' || a.session === filterSession).filter(a => !filterDate || a.date === filterDate).length / itemsPerPage) ? 'not-allowed' : 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              Next
+            </button>
+          </div>
+          </>
             )}
           </div>
         </div>
