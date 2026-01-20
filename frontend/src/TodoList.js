@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import Alert from './components/Alert';
 import { CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -10,6 +11,7 @@ function TodoList({ token }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dateTask, setDateTask] = useState('');
   const [loading, setLoading] = useState(true);
+  const [alert, setAlert] = useState(null);
   const itemsPerPage = 5;
 
   useEffect(() => {
@@ -46,7 +48,7 @@ function TodoList({ token }) {
       await fetchTodos();
     } catch (error) {
       console.error('Error adding task:', error);
-      alert('Failed to add task. Please make sure the todos table exists in Supabase.');
+      setAlert({ type: 'error', title: 'Error', message: 'Failed to add task. Please make sure the todos table exists in Supabase.' });
     }
   };
 
@@ -86,6 +88,15 @@ function TodoList({ token }) {
   const monthName = selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   return (
+    <>
+      {alert && (
+        <Alert
+          type={alert.type}
+          title={alert.title}
+          message={alert.message}
+          onClose={() => setAlert(null)}
+        />
+      )}
     <div className="dashboard" style={{overflowX: 'hidden'}}>
       <div className="todo-layout" style={{display: 'flex', gap: '1.5rem', alignItems: 'stretch', flexWrap: 'wrap', maxWidth: '100%'}}>
         <div className="welcome todo-sidebar" style={{flex: '1 1 300px', maxWidth: '350px', order: 1, boxSizing: 'border-box', display: 'flex', flexDirection: 'column'}}>
@@ -316,6 +327,7 @@ function TodoList({ token }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

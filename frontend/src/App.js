@@ -75,11 +75,9 @@ function App() {
       });
     } catch (err) {
       if (err.response?.status === 401) {
-        // Token expired, check if remember me was enabled
         const rememberMe = localStorage.getItem('rememberMe');
         if (!rememberMe) {
           handleLogout();
-          alert('Your session has expired. Please log in again.');
         }
       }
     }

@@ -134,7 +134,7 @@ function Login({ onLogin }) {
       });
       setIsSignup(false);
       setFormData({ firstName: '', lastName: '', email: '', password: '', acceptTerms: false });
-      alert('Account created successfully! Please log in.');
+      setError('Account created successfully! Please log in.');
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Signup failed. Please try again.');
     } finally {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import supabase from './supabaseClient';
+import Alert from './components/Alert';
 
 function ResetPassword({ onSuccess }) {
   const [password, setPassword] = useState('');
@@ -7,6 +8,7 @@ function ResetPassword({ onSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [alert, setAlert] = useState(null);
 
   useEffect(() => {
     // Check if user came from password reset email
@@ -49,8 +51,8 @@ function ResetPassword({ onSuccess }) {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
-      alert('Password updated successfully! You can now log in.');
-      onSuccess();
+      setAlert({ type: 'success', title: 'Success', message: 'Password updated successfully! You can now log in.' });
+      setTimeout(() => onSuccess(), 2000);
     } catch (err) {
       setError(err.message || 'Failed to reset password. Please try again.');
     } finally {
@@ -59,6 +61,15 @@ function ResetPassword({ onSuccess }) {
   };
 
   return (
+    <>
+      {alert && (
+        <Alert
+          type={alert.type}
+          title={alert.title}
+          message={alert.message}
+          onClose={() => { setAlert(null); if (alert.type === 'success') onSuccess(); }}
+        />
+      )}
     <div className="flex min-h-screen bg-navy-dark items-center justify-center p-4">
       <div className="w-full max-w-[420px] bg-navy-dark p-8 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
         <div className="text-center mb-6">
@@ -126,6 +137,7 @@ function ResetPassword({ onSuccess }) {
         </form>
       </div>
     </div>
+    </>
   );
 }
 

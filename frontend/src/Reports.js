@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import Alert from './components/Alert';
 import { CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -15,6 +16,7 @@ function Reports({ token }) {
   const [showModal, setShowModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminAction, setAdminAction] = useState({ type: '', record: null });
+  const [alert, setAlert] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -39,9 +41,9 @@ function Reports({ token }) {
       console.error('Error fetching interns:', error.response?.data || error.message);
       console.error('Status:', error.response?.status);
       if (error.response?.status === 403) {
-        alert('Access denied. Your account role must be "coordinator" in the database.');
+        setAlert({ type: 'error', title: 'Access Denied', message: 'Your account role must be "coordinator" in the database.' });
       } else if (error.response?.status === 401) {
-        alert('Session expired. Please log out and log in again.');
+        setAlert({ type: 'error', title: 'Session Expired', message: 'Please log out and log in again.' });
       }
     }
   };
@@ -132,12 +134,12 @@ function Reports({ token }) {
         { time_in: timeIn },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      alert('Check-in successful');
+      setAlert({ type: 'success', title: 'Success', message: 'Check-in successful' });
       await fetchAllAttendance();
       await fetchInternAttendance(selectedIntern.id);
       setShowAdminModal(false);
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to check in');
+      setAlert({ type: 'error', title: 'Error', message: err.response?.data?.error || 'Failed to check in' });
     }
   };
 
@@ -149,16 +151,25 @@ function Reports({ token }) {
         { time_out: timeOut },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      alert('Check-out successful');
+      setAlert({ type: 'success', title: 'Success', message: 'Check-out successful' });
       await fetchAllAttendance();
       await fetchInternAttendance(selectedIntern.id);
       setShowAdminModal(false);
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to check out');
+      setAlert({ type: 'error', title: 'Error', message: err.response?.data?.error || 'Failed to check out' });
     }
   };
 
   return (
+    <>
+      {alert && (
+        <Alert
+          type={alert.type}
+          title={alert.title}
+          message={alert.message}
+          onClose={() => setAlert(null)}
+        />
+      )}
     <div className="dashboard">
       <div className="welcome">
         <h2>Intern Reports</h2>
@@ -491,6 +502,7 @@ function Reports({ token }) {
         </div>
       )}
     </div>
+    </>
   );
 }
 
