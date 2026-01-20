@@ -302,6 +302,7 @@ function OvertimeRequests({ token }) {
               font-weight: bold;
               margin-bottom: 5px;
               font-size: 9pt;
+              
             }
             .total-hours {
               font-weight: bold;
@@ -410,7 +411,7 @@ function OvertimeRequests({ token }) {
                 <div class="field-group">
                   <span class="field-label">Approval Date:</span>
                   <span class="field-value short-date">${escapeHtml(req.approval_date || '')}</span>
-                  <div class="approval-note">Approved</div>
+                  <div class="approval-note" style="margin-left: 15px;">Approved</div>
                 </div>
               </div>
               <div class="approval-signatures">
@@ -439,7 +440,7 @@ function OvertimeRequests({ token }) {
   };
 
   return (
-    <div className="dashboard" style={{overflowX: 'hidden'}}>
+    <div className="dashboard overflow-x-hidden">
       {alert && (
         <Alert
           type={alert.type}
@@ -448,26 +449,18 @@ function OvertimeRequests({ token }) {
           onClose={() => setAlert(null)}
         />
       )}
-      <div className="welcome" style={{boxSizing: 'border-box', maxWidth: '100%'}}>
+      <div className="welcome box-border w-full">
         <h2>Overtime Requests</h2>
         <p>Coordinator view of all overtime submissions</p>
       </div>
-      <div className="attendance-table" style={{boxSizing: 'border-box', maxWidth: '100%'}}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap', gap: '1rem' }}>
-          <h3 style={{ margin: 0 }}>All Requests</h3>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+      <div className="attendance-table box-border w-full">
+        <div className="flex justify-between items-center p-5 border-b border-white/5 flex-wrap gap-4">
+          <h3 className="m-0">All Requests</h3>
+          <div className="flex gap-3 flex-wrap">
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#00273C',
-                color: '#e8eaed',
-                border: '1px solid rgba(255, 113, 32, 0.3)',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                cursor: 'pointer'
-              }}
+              className="px-4 py-2 bg-blue-950 text-gray-300 border border-orange-500/30 rounded-lg text-sm cursor-pointer hover:border-orange-500/50"
             >
               <option value="all">All Status</option>
               <option value="Pending">Pending</option>
@@ -476,15 +469,7 @@ function OvertimeRequests({ token }) {
             <select
               value={filterEmployee}
               onChange={(e) => setFilterEmployee(e.target.value)}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#00273C',
-                color: '#e8eaed',
-                border: '1px solid rgba(255, 113, 32, 0.3)',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                cursor: 'pointer'
-              }}
+              className="px-4 py-2 bg-blue-950 text-gray-300 border border-orange-500/30 rounded-lg text-sm cursor-pointer hover:border-orange-500/50"
             >
               <option value="all">All Employees</option>
               {[...new Set(requests.map(r => r.full_name || r.employee_name))].map(name => (
@@ -495,15 +480,7 @@ function OvertimeRequests({ token }) {
               type="date"
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#00273C',
-                color: '#e8eaed',
-                border: '1px solid rgba(255, 113, 32, 0.3)',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                cursor: 'pointer'
-              }}
+              className="px-4 py-2 bg-blue-950 text-gray-300 border border-orange-500/30 rounded-lg text-sm cursor-pointer hover:border-orange-500/50"
             />
             {(filterStatus !== 'all' || filterEmployee !== 'all' || filterDate) && (
               <button
@@ -512,16 +489,7 @@ function OvertimeRequests({ token }) {
                   setFilterEmployee('all');
                   setFilterDate('');
                 }}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: 'rgba(255, 113, 32, 0.2)',
-                  color: '#FF7120',
-                  border: '1px solid rgba(255, 113, 32, 0.3)',
-                  borderRadius: '8px',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  fontWeight: '600'
-                }}
+                className="px-4 py-2 bg-orange-500/20 text-orange-500 border border-orange-500/30 rounded-lg text-sm cursor-pointer font-semibold hover:bg-orange-500/30"
               >
                 Clear Filters
               </button>
@@ -546,7 +514,7 @@ function OvertimeRequests({ token }) {
             <tbody>
               {requests.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', color: '#a0a4a8', padding: '1.5rem' }}>
+                  <td colSpan="6" className="text-center text-gray-500 p-6">
                     No requests yet.
                   </td>
                 </tr>
@@ -556,7 +524,7 @@ function OvertimeRequests({ token }) {
                   .filter(req => filterEmployee === 'all' || (req.full_name || req.employee_name) === filterEmployee)
                   .filter(req => !filterDate || req.date_completed === filterDate)
                   .map(req => (
-                  <tr key={req.id} onClick={() => openDetail(req)} style={{ cursor: 'pointer' }}>
+                  <tr key={req.id} onClick={() => openDetail(req)} className="cursor-pointer">
                     <td>{req.full_name || req.employee_name}</td>
                     <td>{req.department || '-'}</td>
                     <td>{req.date_completed || '-'}</td>
@@ -567,16 +535,11 @@ function OvertimeRequests({ token }) {
                         type="button"
                         onClick={(e) => { e.stopPropagation(); printReport(req); }}
                         disabled={statusLabel(req) !== 'Approved'}
-                        style={{
-                          padding: '0.4rem 0.8rem',
-                          borderRadius: '6px',
-                          border: 'none',
-                          background: '#FF7120',
-                          color: '#fff',
-                          cursor: statusLabel(req) === 'Approved' ? 'pointer' : 'not-allowed',
-                          fontSize: '0.8rem',
-                          fontWeight: '600'
-                        }}
+                        className={`px-3 py-1 rounded text-white text-xs font-semibold transition-all ${
+                          statusLabel(req) === 'Approved'
+                            ? 'bg-orange-500 cursor-pointer hover:bg-orange-600'
+                            : 'bg-gray-600 cursor-not-allowed opacity-50'
+                        }`}
                       >
                         Print Form
                       </button>
@@ -591,138 +554,97 @@ function OvertimeRequests({ token }) {
       </div>
 
       {selected && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000,
-          padding: '1rem'
-        }}>
-          <div style={{
-            background: '#001f35',
-            borderRadius: '12px',
-            border: '1px solid rgba(255,113,32,0.3)',
-            maxWidth: '900px',
-            width: '100%',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            padding: '1.5rem'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ color: '#fff', margin: 0 }}>{selected.full_name || selected.employee_name}</h3>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-blue-950 rounded-xl border border-orange-500/30 max-w-4xl w-full max-h-screen overflow-auto p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white m-0">{selected.full_name || selected.employee_name}</h3>
               <button
                 onClick={() => setSelected(null)}
-                style={{ background: 'transparent', border: 'none', color: '#FF7120', fontSize: '1.5rem', cursor: 'pointer' }}
+                className="bg-transparent border-none text-orange-500 text-2xl cursor-pointer hover:text-orange-600"
               >×</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
               <div>
-                <label style={{ color: '#a0a4a8' }}>Employee Name</label>
-                <div style={{ color: '#fff' }}>{selected.full_name || selected.employee_name || '-'}</div>
+                <label className="text-gray-500 text-sm">Employee Name</label>
+                <div className="text-white">{selected.full_name || selected.employee_name || '-'}</div>
               </div>
               <div>
-                <label style={{ color: '#a0a4a8' }}>Job Position</label>
-                <div style={{ color: '#fff' }}>{selected.job_position || '-'}</div>
+                <label className="text-gray-500 text-sm">Job Position</label>
+                <div className="text-white">{selected.job_position || '-'}</div>
               </div>
               <div>
-                <label style={{ color: '#a0a4a8' }}>Department</label>
-                <div style={{ color: '#fff' }}>{selected.department || '-'}</div>
+                <label className="text-gray-500 text-sm">Department</label>
+                <div className="text-white">{selected.department || '-'}</div>
               </div>
               <div>
-                <label style={{ color: '#a0a4a8' }}>Date Completed</label>
-                <div style={{ color: '#fff' }}>{selected.date_completed || '-'}</div>
+                <label className="text-gray-500 text-sm">Date Completed</label>
+                <div className="text-white">{selected.date_completed || '-'}</div>
               </div>
               <div>
-                <label style={{ color: '#a0a4a8' }}>Anticipated Hours</label>
-                <div style={{ color: '#fff' }}>{selected.anticipated_hours || '-'}</div>
+                <label className="text-gray-500 text-sm">Anticipated Hours</label>
+                <div className="text-white">{selected.anticipated_hours || '-'}</div>
               </div>
               <div>
-                <label style={{ color: '#a0a4a8' }}>Approval Date</label>
-                <div style={{ color: '#fff' }}>{selected.approval_date || '-'}</div>
+                <label className="text-gray-500 text-sm">Approval Date</label>
+                <div className="text-white">{selected.approval_date || '-'}</div>
               </div>
             </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ color: '#a0a4a8' }}>Explanation</label>
-              <div style={{ color: '#fff', background: '#00273C', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div className="mb-4">
+              <label className="text-gray-500 text-sm">Explanation</label>
+              <div className="text-white bg-blue-900 p-3 rounded-lg border border-white/10">
                 {selected.explanation || '-'}
               </div>
             </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ color: '#a0a4a8' }}>Overtime Periods</label>
-              <div style={{ background: '#001b30', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.75rem' }}>
+            <div className="mb-4">
+              <label className="text-gray-500 text-sm">Overtime Periods</label>
+              <div className="bg-blue-950 border border-white/10 rounded-lg p-3">
                 {Array.isArray(selected.periods) && selected.periods.length > 0 ? (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <table className="w-full border-collapse text-xs">
                     <thead>
                       <tr>
-                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>#</th>
-                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>Start Date</th>
-                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>Start Time</th>
-                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>End Date</th>
-                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>End Time</th>
+                        <th className="text-left p-1 border-b border-white/10">#</th>
+                        <th className="text-left p-1 border-b border-white/10">Start Date</th>
+                        <th className="text-left p-1 border-b border-white/10">Start Time</th>
+                        <th className="text-left p-1 border-b border-white/10">End Date</th>
+                        <th className="text-left p-1 border-b border-white/10">End Time</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selected.periods.map((period, idx) => (
                         <tr key={`pv-${idx}`}>
-                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{idx + 1}</td>
-                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{period.start_date || '-'}</td>
-                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{period.start_time || '-'}</td>
-                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{period.end_date || '-'}</td>
-                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{period.end_time || '-'}</td>
+                          <td className="border-b border-white/10 p-1">{idx + 1}</td>
+                          <td className="border-b border-white/10 p-1">{period.start_date || '-'}</td>
+                          <td className="border-b border-white/10 p-1">{period.start_time || '-'}</td>
+                          <td className="border-b border-white/10 p-1">{period.end_date || '-'}</td>
+                          <td className="border-b border-white/10 p-1">{period.end_time || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 ) : (
-                  <div style={{ color: '#fff' }}>No periods recorded.</div>
+                  <div className="text-white">No periods recorded.</div>
                 )}
               </div>
             </div>
-            <div style={{ marginBottom: '1rem', maxWidth: '360px' }}>
-              <label style={{ color: '#a0a4a8' }}>Date of Approval</label>
+            <div className="mb-4 max-w-sm">
+              <label className="text-gray-500 text-sm">Date of Approval</label>
               <input
                 type="date"
                 value={approvalDate}
                 onChange={(e) => setApprovalDate(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  background: '#00273C',
-                  color: '#e8eaed',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  fontSize: '0.95rem'
-                }}
+                className="w-full px-3 py-2 bg-blue-900 text-gray-300 border border-white/10 rounded-lg text-sm"
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={submitApproval}
-                style={{
-                  background: '#FF7120',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '0.8rem 1.4rem',
-                  fontWeight: '700',
-                  cursor: 'pointer'
-                }}
+                className="bg-orange-500 text-white border-none rounded-lg px-6 py-2 font-bold cursor-pointer hover:bg-orange-600 transition-colors"
               >
                 Save Approval
               </button>
               <button
                 onClick={() => setSelected(null)}
-                style={{
-                  background: 'transparent',
-                  color: '#a0a4a8',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px',
-                  padding: '0.8rem 1.4rem',
-                  cursor: 'pointer'
-                }}
+                className="bg-transparent text-gray-500 border border-white/20 rounded-lg px-6 py-2 cursor-pointer hover:text-gray-300 hover:border-white/40 transition-colors"
               >
                 Close
               </button>
