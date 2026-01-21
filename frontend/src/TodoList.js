@@ -22,6 +22,8 @@ function TodoList({ token, user }) {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [selectedAssignee, setSelectedAssignee] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState(new Date());
+  const [showCalendar, setShowCalendar] = useState(false);
   const itemsPerPage = 5;
 
   const fetchUserProfile = useCallback(async () => {
@@ -32,21 +34,6 @@ function TodoList({ token, user }) {
       setUserProfile(data);
     } catch (err) {
       console.error('Failed to fetch profile:', err);
-    }
-  }, [token]);
-
-  const fetchTodos = useCallback(async (type) => {
-    setLoading(true);
-    try {
-      const { data } = await axios.get(`${API}/todos`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { type }
-      });
-      setTodos(data);
-    } catch (err) {
-      console.error('Failed to fetch todos:', err);
-    } finally {
-      setLoading(false);
     }
   }, [token]);
 
@@ -63,6 +50,20 @@ function TodoList({ token, user }) {
       console.error('Failed to fetch groups:', err);
     }
   }, [token, selectedGroup]);
+
+  const fetchTodos = useCallback(async (tab = activeTab) => {
+    setLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/todos?type=${tab}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTodos(data);
+    } catch (err) {
+      console.error('Failed to fetch todos:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, token]);
 
   const fetchAvailableUsers = useCallback(async () => {
     try {
@@ -106,13 +107,17 @@ function TodoList({ token, user }) {
 
   const isCoordinator = user?.role === 'coordinator';
   const isLeader = userProfile?.is_leader;
+  const leaderHasGroup = groups.some(g => g.leader_id === userProfile?.id);
 
   const addDateTodo = async (e) => {
     e.preventDefault();
     if (!dateTask.trim()) return;
     
     try {
-      const taskWithDate = `[${selectedDate.toLocaleDateString()}] ${dateTask}`;
+      const deadlineSuffix = activeTab === 'assigned' && deadlineDate
+        ? ` (Deadline: ${new Date(deadlineDate).toLocaleDateString()})`
+        : '';
+      const taskWithDate = `[${selectedDate.toLocaleDateString()}] ${dateTask}${deadlineSuffix}`;
       const todoData = { 
         task: taskWithDate, 
         todo_type: activeTab 
@@ -193,6 +198,10 @@ function TodoList({ token, user }) {
 
   const createGroup = async () => {
     if (!newGroupName.trim()) return;
+    if (isLeader && leaderHasGroup) {
+      alert('You already lead a group. Leaders can only own one group.');
+      return;
+    }
     try {
       await axios.post(`${API}/groups`, {
         name: newGroupName,
@@ -288,7 +297,6 @@ function TodoList({ token, user }) {
 
   const canAddTodo = () => {
     if (activeTab === 'personal') return true;
-    if (activeTab === 'global') return isCoordinator;
     // Leaders use Assigned tab instead of Group tab for adding tasks
     if (activeTab === 'group') return groups.length > 0 && !isLeader && !isCoordinator;
     if (activeTab === 'assigned') return isCoordinator || isLeader;
@@ -297,7 +305,6 @@ function TodoList({ token, user }) {
 
   const canEditTodo = (todo) => {
     if (todo.todo_type === 'personal') return todo.user_id === userProfile?.id;
-    if (todo.todo_type === 'global') return isCoordinator;
     if (todo.todo_type === 'group') {
       const group = groups.find(g => g.id === todo.group_id);
       return group?.leader_id === userProfile?.id;
@@ -348,25 +355,505 @@ function TodoList({ token, user }) {
     return filteredTodos.filter(todo => todo.completed);
   };
 
+  const renderAssignedCard = (todo) => (
+    <div
+      key={todo.id}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.75rem',
+        padding: '1rem',
+        background: '#00273C',
+        borderRadius: '8px',
+        marginBottom: '0.75rem',
+        border: `1px solid ${todo.pending_completion ? 'rgba(255, 165, 0, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`
+      }}
+    >
+      <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+        <span style={{
+          width: '16px',
+          height: '16px',
+          borderRadius: '50%',
+          background: todo.pending_completion ? '#ffa500' : '#6aa9ff',
+          display: 'inline-block',
+          flexShrink: 0
+        }} />
+        <span style={{
+          flex: 1,
+          color: todo.pending_completion ? '#ffa500' : '#e8eaed',
+          fontSize: '0.95rem',
+          wordBreak: 'break-word'
+        }}>
+          {todo.task.replace(/\[.*?\]\s*/, '')}
+        </span>
+      </div>
+          <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
+        {todo.todo_type === 'group' && todo.group && (
+          <span style={{background: 'rgba(255, 113, 32, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Group: {todo.group.name}
+          </span>
+        )}
+        {todo.todo_type === 'group' && todo.suggester && (
+          <span style={{background: 'rgba(100, 100, 255, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Suggested by: {todo.suggester.full_name}
+          </span>
+        )}
+        {todo.todo_type === 'assigned' && todo.assignee && (
+          <span style={{background: 'rgba(100, 255, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Assigned to: {todo.assignee.full_name}
+          </span>
+        )}
+        {todo.todo_type === 'assigned' && todo.assigner && (
+          <span style={{background: 'rgba(255, 100, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Assigned by: {todo.assigner.full_name}
+          </span>
+        )}
+        {todo.date_assigned && (
+          <span style={{background: 'rgba(150, 150, 150, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Date: {new Date(todo.date_assigned).toLocaleDateString()}
+          </span>
+        )}
+        {todo.pending_completion && (
+          <span style={{background: 'rgba(255, 165, 0, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#ffa500'}}>
+            Pending Approval
+          </span>
+        )}
+      </div>
+      <div style={{display: 'flex', gap: '0.5rem', flexWrap: 'wrap'}}>
+        {todo.todo_type === 'group' && !todo.pending_completion && 
+          !(groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id) && (
+          <button
+            onClick={() => toggleTodo(todo.id, todo.completed)}
+            style={{
+              flex: 1,
+              background: '#28a745',
+              border: 'none',
+              color: 'white',
+              padding: '0.65rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            ✓ Complete
+          </button>
+        )}
+        {todo.todo_type === 'group' && todo.pending_completion && 
+          !(groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id) && (
+          <button
+            onClick={() => rejectCompletion(todo.id)}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: '1px solid rgba(255, 165, 0, 0.5)',
+              color: '#ffa500',
+              padding: '0.65rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            ✗ Cancel
+          </button>
+        )}
+        {todo.todo_type === 'assigned' && todo.assigned_to === todo.assigned_by && todo.assigned_to === userProfile?.id && (
+          <button
+            onClick={() => toggleTodo(todo.id, todo.completed)}
+            style={{
+              flex: 1,
+              background: '#28a745',
+              border: 'none',
+              color: 'white',
+              padding: '0.65rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            ✓ Complete
+          </button>
+        )}
+        {todo.todo_type === 'assigned' && todo.assigned_to !== todo.assigned_by && todo.assigned_to === userProfile?.id && !todo.pending_completion && (
+          <button
+            onClick={() => toggleTodo(todo.id, todo.completed)}
+            style={{
+              flex: 1,
+              background: '#FF7120',
+              border: 'none',
+              color: 'white',
+              padding: '0.65rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            ✓ Mark Complete
+          </button>
+        )}
+        {todo.todo_type === 'assigned' && todo.assigned_to !== todo.assigned_by && todo.assigned_to === userProfile?.id && todo.pending_completion && (
+          <button
+            onClick={() => rejectCompletion(todo.id)}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: '1px solid rgba(255, 165, 0, 0.5)',
+              color: '#ffa500',
+              padding: '0.65rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            ✗ Cancel
+          </button>
+        )}
+        {todo.pending_completion && (
+          todo.assigned_by === userProfile?.id || 
+          isCoordinator || 
+          (todo.todo_type === 'group' && groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id)
+        ) && (
+          <>
+            <button
+              onClick={() => confirmCompletion(todo.id)}
+              style={{
+                flex: 1,
+                background: '#28a745',
+                border: 'none',
+                color: 'white',
+                padding: '0.65rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              ✓ Complete
+            </button>
+            <button
+              onClick={() => rejectCompletion(todo.id)}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: '1px solid rgba(255, 80, 80, 0.5)',
+                color: '#ff5050',
+                padding: '0.65rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              ✗ Reject
+            </button>
+          </>
+        )}
+        {canDeleteTodo(todo) && !todo.pending_completion && (
+          <button
+            onClick={() => deleteTodo(todo.id)}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: '1px solid rgba(255, 113, 32, 0.3)',
+              color: '#FF7120',
+              padding: '0.65rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderCompletedAssignedCard = (todo) => (
+    <div
+      key={todo.id}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+        padding: '1rem',
+        background: 'rgba(0, 39, 60, 0.5)',
+        borderRadius: '8px',
+        marginBottom: '0.5rem',
+        border: '1px solid rgba(40, 167, 69, 0.3)',
+        opacity: 0.8
+      }}
+    >
+      <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+        <span style={{
+          width: '16px',
+          height: '16px',
+          borderRadius: '50%',
+          background: '#28a745',
+          display: 'inline-block',
+          flexShrink: 0
+        }} />
+        <span style={{
+          flex: 1,
+          color: '#6b7280',
+          textDecoration: 'line-through',
+          fontSize: '0.95rem',
+          wordBreak: 'break-word'
+        }}>
+          {todo.task.replace(/\[.*?\]\s*/, '')}
+        </span>
+      </div>
+      <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
+        <span style={{background: 'rgba(150, 150, 150, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+          Date: {new Date(todo.date_assigned || todo.created_at).toLocaleDateString()}
+        </span>
+        {todo.todo_type === 'group' && todo.group && (
+          <span style={{background: 'rgba(255, 113, 32, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Group: {todo.group.name}
+          </span>
+        )}
+        {todo.todo_type === 'group' && todo.suggester && (
+          <span style={{background: 'rgba(100, 100, 255, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Suggested: {todo.suggester.full_name}
+          </span>
+        )}
+        {todo.todo_type === 'group' && todo.suggester && (
+          <span style={{background: 'rgba(100, 255, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Completed by: {todo.suggester.full_name}
+          </span>
+        )}
+        {todo.todo_type === 'assigned' && todo.assignee && (
+          <span style={{background: 'rgba(100, 255, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Completed by: {todo.assignee.full_name}
+          </span>
+        )}
+        <span style={{background: 'rgba(40, 167, 69, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#28a745', fontWeight: '500'}}>
+          Completed
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderStandardCard = (todo, isCompletedSection) => (
+    <div
+      key={todo.id}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.75rem',
+        padding: '1rem',
+        background: '#00273C',
+        borderRadius: '8px',
+        marginBottom: '0.75rem',
+        border: `1px solid ${
+          todo.pending_completion ? 'rgba(255, 165, 0, 0.5)' :
+          todo.is_confirmed === false ? 'rgba(255, 193, 7, 0.5)' : 
+          'rgba(255, 255, 255, 0.1)'
+        }`,
+        opacity: todo.is_confirmed === false ? 0.8 : 1
+      }}
+    >
+      <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+        {activeTab === 'group' && todo.todo_type === 'assigned' && todo.assigned_to !== userProfile?.id ? (
+          <span style={{
+            width: '14px',
+            height: '14px',
+            borderRadius: '50%',
+            background: '#5ecda5',
+            display: 'inline-block',
+            flexShrink: 0
+          }} />
+        ) : (
+          <input
+            type="checkbox"
+            checked={todo.completed || todo.pending_completion}
+            onChange={() => canToggleTodo(todo) && !todo.pending_completion && toggleTodo(todo.id, todo.completed)}
+            disabled={!canToggleTodo(todo) || todo.pending_completion}
+            style={{
+              width: '20px',
+              height: '20px',
+              cursor: (canToggleTodo(todo) && !todo.pending_completion) ? 'pointer' : 'not-allowed',
+              accentColor: todo.pending_completion ? '#ffa500' : '#FF7120',
+              flexShrink: 0,
+              opacity: (canToggleTodo(todo) && !todo.pending_completion) ? 1 : 0.5
+            }}
+          />
+        )}
+        <span
+          style={{
+            flex: 1,
+            color: isCompletedSection ? '#6b7280' : todo.pending_completion ? '#ffa500' : '#e8eaed',
+            textDecoration: isCompletedSection ? 'line-through' : 'none',
+            fontSize: '0.95rem',
+            wordBreak: 'break-word'
+          }}
+        >
+          {todo.task.replace(/\[.*?\]\s*/, '')}
+        </span>
+      </div>
+
+      <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
+        {activeTab === 'group' && todo.todo_type === 'assigned' && (
+          <span style={{background: 'rgba(100, 149, 237, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#6495ED', fontWeight: '500'}}>
+            Assigned Task
+          </span>
+        )}
+        {todo.todo_type === 'group' && todo.group && (
+          <span style={{background: 'rgba(255, 113, 32, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Group: {todo.group.name}
+          </span>
+        )}
+        {todo.todo_type === 'group' && todo.suggester && (
+          <span style={{background: 'rgba(100, 100, 255, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Suggested by: {todo.suggester.full_name}
+          </span>
+        )}
+        {todo.todo_type === 'assigned' && todo.assignee && (
+          <span style={{background: 'rgba(100, 255, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Assigned to: {todo.assignee.full_name}
+          </span>
+        )}
+        {todo.todo_type === 'assigned' && todo.assigner && (
+          <span style={{background: 'rgba(255, 100, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Assigned by: {todo.assigner.full_name}
+          </span>
+        )}
+        {todo.todo_type === 'assigned' && todo.date_assigned && (
+          <span style={{background: 'rgba(150, 150, 150, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
+            Assigned: {new Date(todo.date_assigned).toLocaleDateString()}
+          </span>
+        )}
+        {todo.is_confirmed === false && (
+          <span style={{background: 'rgba(255, 193, 7, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#ffc107'}}>
+            Pending Confirmation
+          </span>
+        )}
+        {todo.pending_completion && (
+          <span style={{background: 'rgba(255, 165, 0, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#ffa500'}}>
+            Pending Completion Approval
+          </span>
+        )}
+        {todo.todo_type === 'assigned' && todo.completed && (
+          <span style={{background: 'rgba(40, 167, 69, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#28a745'}}>
+            ✓ Completed
+          </span>
+        )}
+      </div>
+
+      {!(activeTab === 'group' && todo.todo_type === 'assigned' && todo.assigned_to !== userProfile?.id) && !isCompletedSection && (
+        <div style={{display: 'flex', gap: '0.5rem', flexWrap: 'wrap'}}>
+          {todo.todo_type === 'group' && todo.is_confirmed === false && 
+            groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id && (
+            <button
+              onClick={() => confirmTodo(todo.id)}
+              style={{
+                flex: 1,
+                background: '#28a745',
+                border: 'none',
+                color: 'white',
+                padding: '0.65rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              ✓ Confirm Task
+            </button>
+          )}
+          {activeTab === 'group' && todo.todo_type === 'assigned' && 
+            todo.assigned_to === userProfile?.id && !todo.pending_completion && !todo.completed && (
+            <button
+              onClick={() => toggleTodo(todo.id, todo.completed)}
+              style={{
+                flex: 1,
+                background: '#FF7120',
+                border: 'none',
+                color: 'white',
+                padding: '0.65rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              ✓ Mark Complete
+            </button>
+          )}
+          {activeTab === 'group' && todo.todo_type === 'assigned' && 
+            todo.assigned_to === userProfile?.id && todo.pending_completion && (
+            <button
+              onClick={() => rejectCompletion(todo.id)}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: '1px solid rgba(255, 165, 0, 0.5)',
+                color: '#ffa500',
+                padding: '0.65rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              ✗ Cancel
+            </button>
+          )}
+          {todo.todo_type === 'assigned' && todo.pending_completion && 
+            (todo.assigned_by === userProfile?.id || isCoordinator) && (
+            <button
+              onClick={() => confirmCompletion(todo.id)}
+              style={{
+                flex: 1,
+                background: '#28a745',
+                border: 'none',
+                color: 'white',
+                padding: '0.65rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              ✓ Confirm Completion
+            </button>
+          )}
+          {canDeleteTodo(todo) && activeTab !== 'group' && (
+            <button
+              onClick={() => deleteTodo(todo.id)}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                color: '#FF7120',
+                padding: '0.65rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   const filteredTodos = getFilteredTodos();
+  const ongoingTodos = filteredTodos.filter(todo => !todo.completed);
+  const doneTodos = filteredTodos.filter(todo => todo.completed);
   const { firstDay, daysInMonth } = getDaysInMonth(selectedDate);
   const monthName = selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const tabs = [
-    { id: 'personal', label: 'Personal', icon: '👤' },
-    { id: 'global', label: 'Global', icon: '🌍' },
-    { id: 'group', label: 'Group', icon: '👥' },
-    { id: 'assigned', label: 'Assigned', icon: '📋' }
+    { id: 'personal', label: 'Personal' },
+    { id: 'group', label: 'Team' },
+    { id: 'assigned', label: 'Group' }
   ];
 
   const currentGroup = groups.find(g => g.id === selectedGroup);
 
   return (
     <div className="dashboard" style={{overflowX: 'hidden'}}>
-      {/* Tab Navigation */}
+      {/* Tab Navigation + Calendar Toggle */}
       <div style={{
         display: 'flex',
         gap: '0.5rem',
+        alignItems: 'center',
         marginBottom: '1.5rem',
         flexWrap: 'wrap',
         padding: '0.5rem',
@@ -374,58 +861,62 @@ function TodoList({ token, user }) {
         borderRadius: '12px',
         border: '1px solid rgba(255, 255, 255, 0.1)'
       }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              flex: '1 1 auto',
-              minWidth: '100px',
-              padding: '0.75rem 1rem',
-              background: activeTab === tab.id ? '#FF7120' : 'transparent',
-              color: activeTab === tab.id ? 'white' : '#e8eaed',
-              border: '1px solid rgba(255, 113, 32, 0.3)',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: '500',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem'
-            }}
-          >
-            <span>{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
+        <div style={{display: 'flex', flex: '1 1 auto', gap: '0.5rem', flexWrap: 'wrap'}}>
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                flex: '1 1 auto',
+                minWidth: '100px',
+                padding: '0.75rem 1rem',
+                background: activeTab === tab.id ? '#FF7120' : 'transparent',
+                color: activeTab === tab.id ? 'white' : '#e8eaed',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <span style={{width: '10px', height: '10px', borderRadius: '50%', background: tab.id === 'personal' ? '#6aa9ff' : tab.id === 'group' ? '#f5a524' : '#5ecda5', display: 'inline-block'}} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Management Buttons for Coordinators/Leaders */}
-      {(isCoordinator || isLeader) && (
+      {/* Management Buttons for Coordinators/Leaders - shown only on Group tab (assigned view) */}
+      {(isCoordinator || isLeader) && activeTab === 'assigned' && (
         <div style={{
           display: 'flex',
           gap: '0.5rem',
           marginBottom: '1.5rem',
           flexWrap: 'wrap'
         }}>
-          <button
-            onClick={() => { setShowGroupModal(true); fetchAvailableUsers(); }}
-            style={{
-              padding: '0.75rem 1rem',
-              background: 'transparent',
-              color: '#FF7120',
-              border: '1px solid rgba(255, 113, 32, 0.3)',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-          >
-            ➕ Create Group
-          </button>
+          {(isCoordinator || (isLeader && !leaderHasGroup)) && (
+            <button
+              onClick={() => { setShowGroupModal(true); fetchAvailableUsers(); }}
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'transparent',
+                color: '#FF7120',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              ➕ Create Group
+            </button>
+          )}
           {groups.length > 0 && (
             <button
               onClick={() => { setShowManageGroupModal(true); fetchAvailableUsers(); }}
@@ -469,13 +960,86 @@ function TodoList({ token, user }) {
 
       <div className="todo-layout" style={{display: 'flex', gap: '1.5rem', alignItems: 'stretch', flexWrap: 'wrap', maxWidth: '100%'}}>
         <div className="welcome todo-sidebar" style={{flex: '1 1 300px', maxWidth: '350px', order: 1, boxSizing: 'border-box', display: 'flex', flexDirection: 'column'}}>
-          <h2>{tabs.find(t => t.id === activeTab)?.icon} {tabs.find(t => t.id === activeTab)?.label} Todo List</h2>
+          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem'}}>
+            <h2 style={{margin: 0}}>{tabs.find(t => t.id === activeTab)?.icon} {tabs.find(t => t.id === activeTab)?.label} Todo List</h2>
+            <button
+              onClick={() => setShowCalendar(s => !s)}
+              title="Toggle calendar"
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                color: '#FF7120',
+                borderRadius: '8px',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                letterSpacing: '0.02em'
+              }}
+            >
+              CAL
+            </button>
+          </div>
           <p style={{marginBottom: '1rem'}}>
             {activeTab === 'personal' && 'Your private tasks - only you can see these'}
-            {activeTab === 'global' && 'All public tasks: global, confirmed group & assigned tasks'}
-            {activeTab === 'group' && 'Tasks for your group - suggest or complete team tasks'}
-            {activeTab === 'assigned' && 'Tasks assigned to you or that you assigned to others'}
+            {activeTab === 'group' && 'Team tasks - suggest items and await leader confirmation'}
+            {activeTab === 'assigned' && 'Group tasks you assign to members or that your leader assigned to you'}
           </p>
+
+          {showCalendar && (
+            <div className="checkin-form todo-calendar" style={{marginBottom: '1rem', padding: '1rem'}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
+                <h3 style={{margin: 0}}>Calendar</h3>
+                <div style={{display: 'flex', gap: '0.35rem'}}>
+                  <button onClick={() => changeMonth(-1)} style={{background: 'transparent', border: '1px solid rgba(255, 113, 32, 0.3)', color: '#FF7120', padding: '0.35rem 0.7rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem'}}>‹</button>
+                  <button onClick={() => changeMonth(1)} style={{background: 'transparent', border: '1px solid rgba(255, 113, 32, 0.3)', color: '#FF7120', padding: '0.35rem 0.7rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem'}}>›</button>
+                </div>
+              </div>
+              <div style={{display: 'flex', justifyContent: 'center', marginBottom: '0.75rem'}}>
+                <span style={{color: '#e8eaed', fontSize: '0.95rem', fontWeight: '500'}}>{monthName}</span>
+              </div>
+              <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.3rem', marginBottom: '0.5rem'}}>
+                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                  <div key={day} style={{textAlign: 'center', color: '#6b7280', fontSize: '0.75rem', padding: '0.3rem', fontWeight: '600'}}>{day}</div>
+                ))}
+              </div>
+              <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.3rem'}}>
+                {Array.from({ length: firstDay }).map((_, i) => (
+                  <div key={`empty-${i}`} />
+                ))}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const day = i + 1;
+                  const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
+                  const isSelected = date.toDateString() === selectedDate.toDateString();
+                  const isToday = date.toDateString() === new Date().toDateString();
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => setSelectedDate(date)}
+                      style={{
+                        padding: '0.5rem',
+                        background: isSelected ? '#FF7120' : isToday ? 'rgba(255, 113, 32, 0.2)' : 'transparent',
+                        color: isSelected ? 'white' : '#e8eaed',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        fontWeight: isSelected || isToday ? '600' : '400',
+                        transition: 'all 0.2s',
+                        minWidth: 0
+                      }}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           
           {activeTab === 'group' && groups.length > 0 && (
             <div style={{marginBottom: '1rem'}}>
@@ -514,114 +1078,33 @@ function TodoList({ token, user }) {
 
           <div style={{marginTop: 'auto', padding: '1rem', background: 'rgba(255, 113, 32, 0.1)', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)'}}>
             <p style={{fontSize: '0.85rem', color: '#e8eaed', marginBottom: '0.5rem'}}>
-              {activeTab === 'personal' && '🔒 These tasks are private to you.'}
-              {activeTab === 'global' && '🌍 Shows global + confirmed group + assigned tasks. Personal excluded.'}
-              {activeTab === 'group' && '👥 Group members can suggest tasks. Leaders must confirm.'}
-              {activeTab === 'assigned' && '📋 Leaders assign tasks to interns. Interns can only mark complete.'}
+              {activeTab === 'personal' && 'These tasks are private to you.'}
+              {activeTab === 'group' && 'Team members can suggest tasks; leaders confirm before work starts.'}
+              {activeTab === 'assigned' && 'Assign tasks to members and track completions here.'}
             </p>
           </div>
 
           <div className="checkin-form" style={{marginTop: '1rem', padding: '1rem'}}>
-            <h3 style={{fontSize: '1rem', marginBottom: '0.75rem'}}>GitHub Issues</h3>
-            <p style={{fontSize: '0.85rem', color: '#e8eaed', marginBottom: '1rem'}}>
-              Check or add issues to the project repository
-            </p>
-            <button
-              onClick={() => window.open('https://github.com/demesis221/TGGGsysattendance/issues', '_blank')}
-              style={{
-                width: '100%',
-                background: '#FF7120',
-                color: 'white',
-                border: 'none',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              <span>↗</span>
-              View GitHub Issues
-            </button>
-          </div>
-        </div>
-
-        <div className="checkin-form todo-calendar" style={{flex: '1 1 300px', maxWidth: '400px', order: 2, boxSizing: 'border-box', overflow: 'hidden', display: 'flex', flexDirection: 'column'}}>
-          <h3>Calendar</h3>
-          <div style={{marginBottom: '1rem', width: '100%', overflow: 'hidden'}}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
-              <button onClick={() => changeMonth(-1)} style={{background: 'transparent', border: '1px solid rgba(255, 113, 32, 0.3)', color: '#FF7120', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem'}}>‹</button>
-              <span style={{color: '#e8eaed', fontSize: '0.95rem', fontWeight: '500'}}>{monthName}</span>
-              <button onClick={() => changeMonth(1)} style={{background: 'transparent', border: '1px solid rgba(255, 113, 32, 0.3)', color: '#FF7120', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem'}}>›</button>
-            </div>
-            <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.3rem', marginBottom: '0.5rem'}}>
-              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                <div key={day} style={{textAlign: 'center', color: '#6b7280', fontSize: '0.75rem', padding: '0.3rem', fontWeight: '600'}}>{day}</div>
-              ))}
-            </div>
-            <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.3rem'}}>
-              {Array.from({ length: firstDay }).map((_, i) => (
-                <div key={`empty-${i}`} />
-              ))}
-              {Array.from({ length: daysInMonth }).map((_, i) => {
-                const day = i + 1;
-                const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
-                const isSelected = date.toDateString() === selectedDate.toDateString();
-                const isToday = date.toDateString() === new Date().toDateString();
-                return (
-                  <button
-                    key={day}
-                    onClick={() => setSelectedDate(date)}
-                    style={{
-                      padding: '0.5rem',
-                      background: isSelected ? '#FF7120' : isToday ? 'rgba(255, 113, 32, 0.2)' : 'transparent',
-                      color: isSelected ? 'white' : '#e8eaed',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      fontWeight: isSelected || isToday ? '600' : '400',
-                      transition: 'all 0.2s',
-                      minWidth: 0
-                    }}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="checkin-form todo-main" style={{flex: '1 1 400px', order: 3, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', maxHeight: '600px', overflow: 'hidden'}}>
-        {loading ? (
-          <CardSkeleton />
-        ) : (
-          <>
-            <h3 style={{flexShrink: 0}}>Tasks for {selectedDate.toLocaleDateString()}</h3>
-            
-            {canAddTodo() && (
-              <form onSubmit={addDateTodo} className="todo-form" style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem', flexShrink: 0}}>
+            <h3 style={{fontSize: '1rem', marginBottom: '0.75rem'}}>Add Task</h3>
+            {canAddTodo() ? (
+              <form onSubmit={addDateTodo} style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
                 <input
                   type="text"
                   value={dateTask}
                   onChange={(e) => setDateTask(e.target.value)}
-                  placeholder="Enter your task..."
+                  placeholder={activeTab === 'assigned' ? 'Enter task to assign...' : 'Enter your task...'}
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    background: '#00273C',
+                    background: '#001824',
                     color: '#e8eaed',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                     borderRadius: '8px',
                     fontSize: '0.9rem'
                   }}
+                  required
                 />
-                
+
                 {activeTab === 'assigned' && (
                   <select
                     value={selectedAssignee}
@@ -629,7 +1112,7 @@ function TodoList({ token, user }) {
                     style={{
                       width: '100%',
                       padding: '0.75rem',
-                      background: '#00273C',
+                      background: '#001824',
                       color: '#e8eaed',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                       borderRadius: '8px',
@@ -643,614 +1126,149 @@ function TodoList({ token, user }) {
                     ))}
                   </select>
                 )}
-                
+
+                {activeTab === 'assigned' && (
+                  <div style={{display: 'flex', gap: '0.5rem', flexWrap: 'wrap'}}>
+                    <div style={{flex: '1 1 180px', minWidth: 0}}>
+                      <label style={{display: 'block', marginBottom: '0.35rem', color: '#e8eaed', fontSize: '0.8rem'}}>Work Date</label>
+                      <input
+                        type="date"
+                        value={selectedDate ? new Date(selectedDate).toISOString().split('T')[0] : ''}
+                        onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                        style={{
+                          width: '100%',
+                          padding: '0.6rem',
+                          background: '#001824',
+                          color: '#e8eaed',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '6px',
+                          fontSize: '0.9rem'
+                        }}
+                        required
+                      />
+                    </div>
+                    <div style={{flex: '1 1 180px', minWidth: 0}}>
+                      <label style={{display: 'block', marginBottom: '0.35rem', color: '#e8eaed', fontSize: '0.8rem'}}>Deadline</label>
+                      <input
+                        type="date"
+                        value={deadlineDate ? new Date(deadlineDate).toISOString().split('T')[0] : ''}
+                        onChange={(e) => setDeadlineDate(new Date(e.target.value))}
+                        style={{
+                          width: '100%',
+                          padding: '0.6rem',
+                          background: '#001824',
+                          color: '#e8eaed',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '6px',
+                          fontSize: '0.9rem'
+                        }}
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <button type="submit" className="todo-add-btn" style={{width: '100%', padding: '0.75rem'}}>
                   {activeTab === 'group' && !isLeader && !isCoordinator ? 'Suggest Task' : 'Add Task'}
                 </button>
               </form>
-            )}
-
-            {!canAddTodo() && (
-              <div style={{padding: '1rem', marginBottom: '1rem', background: 'rgba(255, 113, 32, 0.1)', borderRadius: '8px', textAlign: 'center', flexShrink: 0}}>
-                <p style={{color: '#e8eaed', margin: 0, fontSize: '0.9rem'}}>
-                  {activeTab === 'global' && 'Only coordinators can add global tasks.'}
-                  {activeTab === 'group' && (isLeader || isCoordinator) && 'Leaders assign tasks via the Assigned tab.'}
+            ) : (
+              <div style={{padding: '0.75rem', background: 'rgba(255, 113, 32, 0.1)', borderRadius: '6px', border: '1px solid rgba(255, 113, 32, 0.2)'}}>
+                <p style={{margin: 0, color: '#e8eaed', fontSize: '0.9rem'}}>
+                  {activeTab === 'group' && (isLeader || isCoordinator) && 'Leaders assign tasks via the Group tab.'}
                   {activeTab === 'group' && !isLeader && !isCoordinator && 'You need to be in a group to add group tasks.'}
                   {activeTab === 'assigned' && 'Only leaders and coordinators can assign tasks.'}
                 </p>
               </div>
             )}
+          </div>
+        </div>
 
+        {/* Calendar card removed from center; calendar lives in the sidebar via icon toggle */}
+
+        <div className="checkin-form todo-main" style={{flex: '1 1 500px', order: 3, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', maxHeight: '650px', overflow: 'hidden'}}>
+        {loading ? (
+          <CardSkeleton />
+        ) : (
+          <>
+            <h3 style={{flexShrink: 0}}>Tasks for {selectedDate.toLocaleDateString()}</h3>
+            
             <div style={{flex: 1, overflowY: 'auto', paddingRight: '0.5rem'}}>
               {activeTab === 'assigned' ? (
-                /* Assigned Tab - Split into Active and History */
-                <>
-                  {/* Active Tasks Section */}
-                  <div style={{marginBottom: '2rem'}}>
+                /* Assigned Tab - Ongoing and Completed */
+                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem'}}>
+                  <div>
                     <h3 style={{color: '#e8eaed', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                      📋 Active Tasks
+                      <span style={{width: '10px', height: '10px', borderRadius: '50%', background: '#5ecda5', display: 'inline-block'}} />
+                      Ongoing Tasks
                       <span style={{background: 'rgba(255, 113, 32, 0.2)', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem'}}>
                         {getActiveTodos().length}
                       </span>
                     </h3>
                     {getActiveTodos().length === 0 ? (
                       <p style={{textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px'}}>
-                        No active assigned tasks for this date.
+                        No ongoing assigned tasks for this date.
                       </p>
                     ) : (
-                      getActiveTodos().map(todo => (
-                        <div
-                          key={todo.id}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.75rem',
-                            padding: '1rem',
-                            background: '#00273C',
-                            borderRadius: '8px',
-                            marginBottom: '0.75rem',
-                            border: `1px solid ${todo.pending_completion ? 'rgba(255, 165, 0, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`
-                          }}
-                        >
-                          <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-                            <span style={{fontSize: '1.2rem'}}>{todo.pending_completion ? '⏳' : '📌'}</span>
-                            <span style={{
-                              flex: 1,
-                              color: todo.pending_completion ? '#ffa500' : '#e8eaed',
-                              fontSize: '0.95rem',
-                              wordBreak: 'break-word'
-                            }}>
-                              {todo.task.replace(/\[.*?\]\s*/, '')}
-                            </span>
-                          </div>
-                          
-                          {/* Task metadata */}
-                          <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
-                            {/* Show group info for group todos */}
-                            {todo.todo_type === 'group' && todo.group && (
-                              <span style={{background: 'rgba(255, 113, 32, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                👥 Group: {todo.group.name}
-                              </span>
-                            )}
-                            {todo.todo_type === 'group' && todo.suggester && (
-                              <span style={{background: 'rgba(100, 100, 255, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                Suggested by: {todo.suggester.full_name}
-                              </span>
-                            )}
-                            {todo.todo_type === 'assigned' && todo.assignee && (
-                              <span style={{background: 'rgba(100, 255, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                Assigned to: {todo.assignee.full_name}
-                              </span>
-                            )}
-                            {todo.todo_type === 'assigned' && todo.assigner && (
-                              <span style={{background: 'rgba(255, 100, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                Assigned by: {todo.assigner.full_name}
-                              </span>
-                            )}
-                            {todo.date_assigned && (
-                              <span style={{background: 'rgba(150, 150, 150, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                📅 {new Date(todo.date_assigned).toLocaleDateString()}
-                              </span>
-                            )}
-                            {todo.pending_completion && (
-                              <span style={{background: 'rgba(255, 165, 0, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#ffa500'}}>
-                                ⏳ Pending Approval
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Action buttons for assigned tab */}
-                          <div style={{display: 'flex', gap: '0.5rem', flexWrap: 'wrap'}}>
-                            {/* Group todos - member can complete or cancel pending */}
-                            {todo.todo_type === 'group' && !todo.pending_completion && 
-                              !(groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id) && (
-                              <button
-                                onClick={() => toggleTodo(todo.id, todo.completed)}
-                                style={{
-                                  flex: 1,
-                                  background: '#28a745',
-                                  border: 'none',
-                                  color: 'white',
-                                  padding: '0.65rem 1rem',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                ✓ Complete
-                              </button>
-                            )}
-                            {/* Group todos - member sees Cancel button when pending */}
-                            {todo.todo_type === 'group' && todo.pending_completion && 
-                              !(groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id) && (
-                              <button
-                                onClick={() => rejectCompletion(todo.id)}
-                                style={{
-                                  flex: 1,
-                                  background: 'transparent',
-                                  border: '1px solid rgba(255, 165, 0, 0.5)',
-                                  color: '#ffa500',
-                                  padding: '0.65rem 1rem',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                ✗ Cancel
-                              </button>
-                            )}
-                            {/* Self-assigned tasks - leader can complete directly */}
-                            {todo.todo_type === 'assigned' && todo.assigned_to === todo.assigned_by && todo.assigned_to === userProfile?.id && (
-                              <button
-                                onClick={() => toggleTodo(todo.id, todo.completed)}
-                                style={{
-                                  flex: 1,
-                                  background: '#28a745',
-                                  border: 'none',
-                                  color: 'white',
-                                  padding: '0.65rem 1rem',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                ✓ Complete
-                              </button>
-                            )}
-                            {/* Assignee can mark for completion (non self-assigned) */}
-                            {todo.todo_type === 'assigned' && todo.assigned_to !== todo.assigned_by && todo.assigned_to === userProfile?.id && !todo.pending_completion && (
-                              <button
-                                onClick={() => toggleTodo(todo.id, todo.completed)}
-                                style={{
-                                  flex: 1,
-                                  background: '#FF7120',
-                                  border: 'none',
-                                  color: 'white',
-                                  padding: '0.65rem 1rem',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                ✓ Mark Complete
-                              </button>
-                            )}
-                            {/* Assignee sees Cancel button when pending */}
-                            {todo.todo_type === 'assigned' && todo.assigned_to !== todo.assigned_by && todo.assigned_to === userProfile?.id && todo.pending_completion && (
-                              <button
-                                onClick={() => rejectCompletion(todo.id)}
-                                style={{
-                                  flex: 1,
-                                  background: 'transparent',
-                                  border: '1px solid rgba(255, 165, 0, 0.5)',
-                                  color: '#ffa500',
-                                  padding: '0.65rem 1rem',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                ✗ Cancel
-                              </button>
-                            )}
-                            {/* Leader can confirm/reject completion - for both assigned and group todos */}
-                            {todo.pending_completion && (
-                              todo.assigned_by === userProfile?.id || 
-                              isCoordinator || 
-                              (todo.todo_type === 'group' && groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id)
-                            ) && (
-                              <>
-                                <button
-                                  onClick={() => confirmCompletion(todo.id)}
-                                  style={{
-                                    flex: 1,
-                                    background: '#28a745',
-                                    border: 'none',
-                                    color: 'white',
-                                    padding: '0.65rem 1rem',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.85rem'
-                                  }}
-                                >
-                                  ✓ Complete
-                                </button>
-                                <button
-                                  onClick={() => rejectCompletion(todo.id)}
-                                  style={{
-                                    flex: 1,
-                                    background: 'transparent',
-                                    border: '1px solid rgba(255, 80, 80, 0.5)',
-                                    color: '#ff5050',
-                                    padding: '0.65rem 1rem',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.85rem'
-                                  }}
-                                >
-                                  ✗ Reject
-                                </button>
-                              </>
-                            )}
-                            {/* Delete button for non-pending tasks */}
-                            {canDeleteTodo(todo) && !todo.pending_completion && (
-                              <button
-                                onClick={() => deleteTodo(todo.id)}
-                                style={{
-                                  flex: 1,
-                                  background: 'transparent',
-                                  border: '1px solid rgba(255, 113, 32, 0.3)',
-                                  color: '#FF7120',
-                                  padding: '0.65rem 1rem',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))
+                      getActiveTodos().map(renderAssignedCard)
                     )}
                   </div>
 
-                  {/* History Section - Completed Tasks */}
                   <div>
                     <h3 style={{color: '#e8eaed', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                      📜 History
+                      <span style={{width: '10px', height: '10px', borderRadius: '50%', background: '#28a745', display: 'inline-block'}} />
+                      Done / Completed
                       <span style={{background: 'rgba(40, 167, 69, 0.2)', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem', color: '#28a745'}}>
                         {getCompletedTodos().length}
                       </span>
                     </h3>
                     {getCompletedTodos().length === 0 ? (
                       <p style={{textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px'}}>
-                        No completed tasks in history.
+                        No completed tasks for this date.
                       </p>
                     ) : (
-                      getCompletedTodos().map(todo => (
-                        <div
-                          key={todo.id}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.5rem',
-                            padding: '1rem',
-                            background: 'rgba(0, 39, 60, 0.5)',
-                            borderRadius: '8px',
-                            marginBottom: '0.5rem',
-                            border: '1px solid rgba(40, 167, 69, 0.3)',
-                            opacity: 0.8
-                          }}
-                        >
-                          <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-                            <span style={{fontSize: '1.2rem', color: '#28a745'}}>✓</span>
-                            <span style={{
-                              flex: 1,
-                              color: '#6b7280',
-                              textDecoration: 'line-through',
-                              fontSize: '0.95rem',
-                              wordBreak: 'break-word'
-                            }}>
-                              {todo.task.replace(/\[.*?\]\s*/, '')}
-                            </span>
-                          </div>
-                          <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
-                            {/* Date */}
-                            <span style={{background: 'rgba(150, 150, 150, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                              📅 {new Date(todo.date_assigned || todo.created_at).toLocaleDateString()}
-                            </span>
-                            {/* Show group info for group todos */}
-                            {todo.todo_type === 'group' && todo.group && (
-                              <span style={{background: 'rgba(255, 113, 32, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                👥 {todo.group.name}
-                              </span>
-                            )}
-                            {/* Suggested by - for group todos */}
-                            {todo.todo_type === 'group' && todo.suggester && (
-                              <span style={{background: 'rgba(100, 100, 255, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                💡 Suggested: {todo.suggester.full_name}
-                              </span>
-                            )}
-                            {/* Completed by - for group todos (suggester completes) */}
-                            {todo.todo_type === 'group' && todo.suggester && (
-                              <span style={{background: 'rgba(100, 255, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                ✓ Completed: {todo.suggester.full_name}
-                              </span>
-                            )}
-                            {/* Completed by - for assigned todos (assignee completes) */}
-                            {todo.todo_type === 'assigned' && todo.assignee && (
-                              <span style={{background: 'rgba(100, 255, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                                ✓ Completed: {todo.assignee.full_name}
-                              </span>
-                            )}
-                            {/* Completed badge */}
-                            <span style={{background: 'rgba(40, 167, 69, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#28a745', fontWeight: '500'}}>
-                              ✓ Completed
-                            </span>
-                          </div>
-                        </div>
-                      ))
+                      getCompletedTodos().map(renderCompletedAssignedCard)
                     )}
                   </div>
-                </>
+                </div>
               ) : (
-                /* Other Tabs - Regular rendering */
+                /* Other Tabs - Ongoing and Completed split */
                 <>
-                  {filteredTodos.length === 0 ? (
-                    <p style={{textAlign: 'center', color: '#6b7280', padding: '2rem'}}>
-                      No tasks for this date. {canAddTodo() ? 'Add your first task above!' : ''}
-                    </p>
-                  ) : (
-                    <>
-                    {filteredTodos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(todo => (
-                      <div
-                        key={todo.id}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '0.75rem',
-                          padding: '1rem',
-                          background: '#00273C',
-                          borderRadius: '8px',
-                          marginBottom: '0.75rem',
-                          border: `1px solid ${
-                            todo.pending_completion ? 'rgba(255, 165, 0, 0.5)' :
-                            todo.is_confirmed === false ? 'rgba(255, 193, 7, 0.5)' : 
-                            'rgba(255, 255, 255, 0.1)'
-                          }`,
-                          opacity: todo.is_confirmed === false ? 0.8 : 1
-                        }}
-                      >
-                        <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-                          {/* For assigned tasks in Global tab - always show icon (read-only) */}
-                          {/* For assigned tasks in Group tab - show checkbox only if current user is the assignee */}
-                          {activeTab === 'global' && todo.todo_type === 'assigned' ? (
-                            <span style={{
-                              width: '20px',
-                              height: '20px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '1rem',
-                              flexShrink: 0
-                            }}>
-                              📋
-                            </span>
-                          ) : activeTab === 'group' && todo.todo_type === 'assigned' && todo.assigned_to !== userProfile?.id ? (
-                            <span style={{
-                              width: '20px',
-                              height: '20px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '1rem',
-                              flexShrink: 0
-                            }}>
-                              📋
-                            </span>
-                          ) : (
-                            <input
-                              type="checkbox"
-                              checked={todo.completed || todo.pending_completion}
-                              onChange={() => canToggleTodo(todo) && !todo.pending_completion && toggleTodo(todo.id, todo.completed)}
-                              disabled={!canToggleTodo(todo) || todo.pending_completion}
-                              style={{
-                                width: '20px',
-                                height: '20px',
-                                cursor: (canToggleTodo(todo) && !todo.pending_completion) ? 'pointer' : 'not-allowed',
-                                accentColor: todo.pending_completion ? '#ffa500' : '#FF7120',
-                                flexShrink: 0,
-                                opacity: (canToggleTodo(todo) && !todo.pending_completion) ? 1 : 0.5
-                              }}
-                            />
-                          )}
-                          <span
-                            style={{
-                              flex: 1,
-                              color: todo.completed ? '#6b7280' : todo.pending_completion ? '#ffa500' : '#e8eaed',
-                              textDecoration: todo.completed ? 'line-through' : 'none',
-                              fontSize: '0.95rem',
-                              wordBreak: 'break-word'
-                            }}
-                          >
-                            {todo.task.replace(/\[.*?\]\s*/, '')}
-                          </span>
-                        </div>
-                        
-                        {/* Task metadata */}
-                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
-                          {/* Show "Assigned Task" badge in Global/Group tabs */}
-                          {(activeTab === 'global' || activeTab === 'group') && todo.todo_type === 'assigned' && (
-                            <span style={{background: 'rgba(100, 149, 237, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#6495ED', fontWeight: '500'}}>
-                              📋 Assigned Task
-                            </span>
-                          )}
-                          {todo.todo_type === 'group' && todo.group && (
-                            <span style={{background: 'rgba(255, 113, 32, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                              Group: {todo.group.name}
-                            </span>
-                          )}
-                          {todo.todo_type === 'group' && todo.suggester && (
-                            <span style={{background: 'rgba(100, 100, 255, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                              Suggested by: {todo.suggester.full_name}
-                            </span>
-                          )}
-                          {todo.todo_type === 'assigned' && todo.assignee && (
-                            <span style={{background: 'rgba(100, 255, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                              Assigned to: {todo.assignee.full_name}
-                            </span>
-                          )}
-                          {todo.todo_type === 'assigned' && todo.assigner && (
-                            <span style={{background: 'rgba(255, 100, 100, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                              Assigned by: {todo.assigner.full_name}
-                            </span>
-                          )}
-                          {todo.todo_type === 'assigned' && todo.date_assigned && (
-                            <span style={{background: 'rgba(150, 150, 150, 0.1)', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>
-                              📅 Assigned: {new Date(todo.date_assigned).toLocaleDateString()}
-                            </span>
-                          )}
-                          {todo.is_confirmed === false && (
-                            <span style={{background: 'rgba(255, 193, 7, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#ffc107'}}>
-                              ⏳ Pending Confirmation
-                            </span>
-                          )}
-                          {todo.pending_completion && (
-                            <span style={{background: 'rgba(255, 165, 0, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#ffa500'}}>
-                              ⏳ Pending Completion Approval
-                            </span>
-                          )}
-                          {todo.todo_type === 'assigned' && todo.completed && (
-                            <span style={{background: 'rgba(40, 167, 69, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#28a745'}}>
-                              ✓ Completed
-                            </span>
-                          )}
-                        </div>
-                        
-                        {/* Action buttons - hide for assigned tasks in Global tab, and in Group tab only show for assignee */}
-                        {!(activeTab === 'global' && todo.todo_type === 'assigned') && 
-                         !(activeTab === 'group' && todo.todo_type === 'assigned' && todo.assigned_to !== userProfile?.id) && (
-                        <div style={{display: 'flex', gap: '0.5rem', flexWrap: 'wrap'}}>
-                          {todo.todo_type === 'group' && todo.is_confirmed === false && 
-                            groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id && (
-                            <button
-                              onClick={() => confirmTodo(todo.id)}
-                              style={{
-                                flex: 1,
-                                background: '#28a745',
-                                border: 'none',
-                                color: 'white',
-                                padding: '0.65rem 1rem',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              ✓ Confirm Task
-                            </button>
-                          )}
-                          {/* Assignee can mark complete in Group tab */}
-                          {activeTab === 'group' && todo.todo_type === 'assigned' && 
-                            todo.assigned_to === userProfile?.id && !todo.pending_completion && !todo.completed && (
-                            <button
-                              onClick={() => toggleTodo(todo.id, todo.completed)}
-                              style={{
-                                flex: 1,
-                                background: '#FF7120',
-                                border: 'none',
-                                color: 'white',
-                                padding: '0.65rem 1rem',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              ✓ Mark Complete
-                            </button>
-                          )}
-                          {/* Assignee can cancel pending in Group tab */}
-                          {activeTab === 'group' && todo.todo_type === 'assigned' && 
-                            todo.assigned_to === userProfile?.id && todo.pending_completion && (
-                            <button
-                              onClick={() => rejectCompletion(todo.id)}
-                              style={{
-                                flex: 1,
-                                background: 'transparent',
-                                border: '1px solid rgba(255, 165, 0, 0.5)',
-                                color: '#ffa500',
-                                padding: '0.65rem 1rem',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              ✗ Cancel
-                            </button>
-                          )}
-                          {todo.todo_type === 'assigned' && todo.pending_completion && 
-                            (todo.assigned_by === userProfile?.id || isCoordinator) && (
-                            <button
-                              onClick={() => confirmCompletion(todo.id)}
-                              style={{
-                                flex: 1,
-                                background: '#28a745',
-                                border: 'none',
-                                color: 'white',
-                                padding: '0.65rem 1rem',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              ✓ Confirm Completion
-                            </button>
-                          )}
-                          {canDeleteTodo(todo) && activeTab !== 'group' && (
-                            <button
-                              onClick={() => deleteTodo(todo.id)}
-                              style={{
-                                flex: 1,
-                                background: 'transparent',
-                                border: '1px solid rgba(255, 113, 32, 0.3)',
-                                color: '#FF7120',
-                                padding: '0.65rem 1rem',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                        )}
-                      </div>
-                    ))}
-                    {filteredTodos.length > itemsPerPage && (
-                      <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem'}}>
-                        <div style={{display: 'flex', gap: '0.5rem'}}>
-                          <button
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            style={{
-                              flex: 1,
-                              background: currentPage === 1 ? 'transparent' : '#FF7120',
-                              color: currentPage === 1 ? '#6b7280' : 'white',
-                              border: '1px solid rgba(255, 113, 32, 0.3)',
-                              padding: '0.65rem 1rem',
-                              borderRadius: '6px',
-                              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            Previous
-                          </button>
-                          <button
-                            onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredTodos.length / itemsPerPage), p + 1))}
-                            disabled={currentPage === Math.ceil(filteredTodos.length / itemsPerPage)}
-                            style={{
-                              flex: 1,
-                              background: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? 'transparent' : '#FF7120',
-                              color: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? '#6b7280' : 'white',
-                              border: '1px solid rgba(255, 113, 32, 0.3)',
-                              padding: '0.65rem 1rem',
-                              borderRadius: '6px',
-                              cursor: currentPage === Math.ceil(filteredTodos.length / itemsPerPage) ? 'not-allowed' : 'pointer',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            Next
-                          </button>
-                        </div>
-                        <span style={{textAlign: 'center', padding: '0.5rem', color: '#e8eaed', fontSize: '0.9rem'}}>
-                          Page {currentPage} of {Math.ceil(filteredTodos.length / itemsPerPage)}
+                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem'}}>
+                    <div>
+                      <h3 style={{color: '#e8eaed', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                        <span style={{width: '10px', height: '10px', borderRadius: '50%', background: '#f5a524', display: 'inline-block'}} />
+                        Ongoing Tasks
+                        <span style={{background: 'rgba(255, 113, 32, 0.2)', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem'}}>
+                          {ongoingTodos.length}
                         </span>
-                      </div>
-                    )}
-                    </>
-                  )}
+                      </h3>
+                      {ongoingTodos.length === 0 ? (
+                        <p style={{textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px'}}>
+                          No ongoing tasks for this date.
+                        </p>
+                      ) : (
+                        ongoingTodos.map(todo => renderStandardCard(todo, false))
+                      )}
+                    </div>
+
+                    <div>
+                      <h3 style={{color: '#e8eaed', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                        <span style={{width: '10px', height: '10px', borderRadius: '50%', background: '#28a745', display: 'inline-block'}} />
+                        Done / Completed
+                        <span style={{background: 'rgba(40, 167, 69, 0.2)', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem', color: '#28a745'}}>
+                          {doneTodos.length}
+                        </span>
+                      </h3>
+                      {doneTodos.length === 0 ? (
+                        <p style={{textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px'}}>
+                          No completed tasks for this date.
+                        </p>
+                      ) : (
+                        doneTodos.map(todo => renderStandardCard(todo, true))
+                      )}
+                    </div>
+                  </div>
                 </>
               )}
             </div>
