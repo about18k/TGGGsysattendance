@@ -146,7 +146,7 @@ function App() {
       case 'profile':
         return <Profile token={token} user={user} onLogout={handleLogout} />;
       case 'todos':
-        return <TodoList token={token} />;
+        return <TodoList token={token} user={user} />;
       case 'reports':
         return <Reports token={token} />;
       case 'overtime-requests':

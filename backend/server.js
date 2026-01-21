@@ -393,7 +393,7 @@ app.get('/api/interns', auth, async (req, res) => {
   
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, full_name, profile_picture')
+    .select('id, full_name, profile_picture, is_leader')
     .eq('role', 'intern')
     .order('full_name');
   
@@ -544,51 +544,933 @@ app.post('/api/profile/picture', auth, upload.single('profile_pic'), async (req,
   }
 });
 
-// Todo endpoints
+// ====== GROUP MANAGEMENT ENDPOINTS ======
+
+// Get all groups (for coordinators/leaders)
+app.get('/api/groups', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role, is_leader')
+      .eq('id', req.user.id)
+      .single();
+
+    let query = supabaseAdmin
+      .from('groups')
+      .select(`
+        *,
+        leader:profiles!groups_leader_id_fkey(id, full_name),
+        members:group_members(
+          user:profiles(id, full_name)
+        )
+      `);
+
+    // If not coordinator, only show groups where user is leader or member
+    if (profile?.role !== 'coordinator') {
+      const { data: membership } = await supabaseAdmin
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', req.user.id)
+        .single();
+
+      const { data: leaderGroups } = await supabaseAdmin
+        .from('groups')
+        .select('id')
+        .eq('leader_id', req.user.id);
+
+      const groupIds = [
+        ...(membership ? [membership.group_id] : []),
+        ...(leaderGroups?.map(g => g.id) || [])
+      ];
+
+      if (groupIds.length === 0) {
+        return res.json([]);
+      }
+      query = query.in('id', groupIds);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create a new group (coordinators or leaders only)
+app.post('/api/groups', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role, is_leader')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator' && !profile?.is_leader) {
+      return res.status(403).json({ error: 'Only coordinators or leaders can create groups' });
+    }
+
+    const { name, description, leader_id } = req.body;
+    const { data, error } = await supabaseAdmin
+      .from('groups')
+      .insert({
+        name,
+        description,
+        leader_id: leader_id || req.user.id,
+        created_by: req.user.id
+      })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update group
+app.put('/api/groups/:id', auth, async (req, res) => {
+  try {
+    const { data: group } = await supabaseAdmin
+      .from('groups')
+      .select('leader_id')
+      .eq('id', req.params.id)
+      .single();
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator' && group?.leader_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { name, description, leader_id } = req.body;
+    const { error } = await supabaseAdmin
+      .from('groups')
+      .update({ name, description, leader_id })
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete group (coordinators or group leader)
+app.delete('/api/groups/:id', auth, async (req, res) => {
+  try {
+    const { data: group } = await supabaseAdmin
+      .from('groups')
+      .select('leader_id')
+      .eq('id', req.params.id)
+      .single();
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    const isCoordinator = profile?.role === 'coordinator';
+    const isGroupLeader = group?.leader_id === req.user.id;
+
+    if (!isCoordinator && !isGroupLeader) {
+      return res.status(403).json({ error: 'Only coordinators or group leaders can delete groups' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('groups')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add member to group
+app.post('/api/groups/:id/members', auth, async (req, res) => {
+  try {
+    const { data: group } = await supabaseAdmin
+      .from('groups')
+      .select('leader_id')
+      .eq('id', req.params.id)
+      .single();
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator' && group?.leader_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only leaders or coordinators can add members' });
+    }
+
+    const { user_id } = req.body;
+
+    // Check if user is already in a group
+    const { data: existingMembership } = await supabaseAdmin
+      .from('group_members')
+      .select('group_id')
+      .eq('user_id', user_id)
+      .single();
+
+    if (existingMembership) {
+      return res.status(400).json({ error: 'User is already a member of another group' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('group_members')
+      .insert({ group_id: req.params.id, user_id })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Remove member from group
+app.delete('/api/groups/:id/members/:userId', auth, async (req, res) => {
+  try {
+    const { data: group } = await supabaseAdmin
+      .from('groups')
+      .select('leader_id')
+      .eq('id', req.params.id)
+      .single();
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator' && group?.leader_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only leaders or coordinators can remove members' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('group_members')
+      .delete()
+      .eq('group_id', req.params.id)
+      .eq('user_id', req.params.userId);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get available users (not in any group) - for adding to groups
+app.get('/api/users/available', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role, is_leader')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator' && !profile?.is_leader) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get all interns not in any group
+    const { data: allInterns } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name, role, is_leader')
+      .eq('role', 'intern');
+
+    const { data: groupMembers } = await supabaseAdmin
+      .from('group_members')
+      .select('user_id');
+
+    const memberIds = groupMembers?.map(m => m.user_id) || [];
+    const availableUsers = allInterns?.filter(u => !memberIds.includes(u.id)) || [];
+
+    res.json(availableUsers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Assign leader role to an intern (coordinators only)
+app.post('/api/users/:userId/make-leader', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator') {
+      return res.status(403).json({ error: 'Only coordinators can assign leaders' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ is_leader: true })
+      .eq('id', req.params.userId);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Remove leader role from an intern (coordinators only)
+app.post('/api/users/:userId/remove-leader', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator') {
+      return res.status(403).json({ error: 'Only coordinators can remove leaders' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ is_leader: false })
+      .eq('id', req.params.userId);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all interns (for coordinators to assign leaders)
+app.get('/api/users/interns', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name, is_leader')
+      .eq('role', 'intern')
+      .order('full_name');
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ====== TODO ENDPOINTS ======
+
+// Get all todos (filtered by type)
 app.get('/api/todos', auth, async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('todos')
-    .select('*')
-    .eq('user_id', req.user.id)
-    .order('created_at', { ascending: false });
-  
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    const { type } = req.query;
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role, is_leader')
+      .eq('id', req.user.id)
+      .single();
+
+    // Get user's group membership
+    const { data: membership } = await supabaseAdmin
+      .from('group_members')
+      .select('group_id')
+      .eq('user_id', req.user.id)
+      .single();
+
+    // Get groups where user is leader
+    const { data: leaderGroups } = await supabaseAdmin
+      .from('groups')
+      .select('id')
+      .eq('leader_id', req.user.id);
+
+    const leaderGroupIds = leaderGroups?.map(g => g.id) || [];
+
+    let query = supabaseAdmin
+      .from('todos')
+      .select(`
+        *,
+        creator:profiles!todos_user_id_fkey(id, full_name),
+        assignee:profiles!todos_assigned_to_fkey(id, full_name),
+        assigner:profiles!todos_assigned_by_fkey(id, full_name),
+        suggester:profiles!todos_suggested_by_fkey(id, full_name),
+        group:groups(id, name)
+      `);
+
+    if (type) {
+      if (type === 'personal') {
+        query = query.eq('todo_type', 'personal').eq('user_id', req.user.id);
+      } else if (type === 'group') {
+        // Show group todos for groups user is in or leads (only non-completed ones)
+        // Also show assigned tasks for members of those groups
+        const groupIds = [...(membership ? [membership.group_id] : []), ...leaderGroupIds];
+        if (groupIds.length > 0) {
+          // Get group todos
+          const { data: groupTodos, error: groupError } = await supabaseAdmin
+            .from('todos')
+            .select(`
+              *,
+              creator:profiles!todos_user_id_fkey(id, full_name),
+              assignee:profiles!todos_assigned_to_fkey(id, full_name),
+              assigner:profiles!todos_assigned_by_fkey(id, full_name),
+              suggester:profiles!todos_suggested_by_fkey(id, full_name),
+              group:groups(id, name)
+            `)
+            .eq('todo_type', 'group')
+            .in('group_id', groupIds)
+            .eq('completed', false)
+            .order('created_at', { ascending: false });
+
+          if (groupError) return res.status(500).json({ error: groupError.message });
+
+          // Get members of these groups
+          const { data: groupMembers } = await supabaseAdmin
+            .from('group_members')
+            .select('user_id')
+            .in('group_id', groupIds);
+          
+          const memberIds = groupMembers?.map(m => m.user_id) || [];
+          
+          // Get leaders of these groups
+          const { data: groupsData } = await supabaseAdmin
+            .from('groups')
+            .select('leader_id')
+            .in('id', groupIds);
+          
+          const leaderIds = groupsData?.map(g => g.leader_id).filter(Boolean) || [];
+          
+          // Get assigned tasks where:
+          // - assigned_to is a group member, OR
+          // - assigned_by is a group leader
+          let assignedTodos = [];
+          
+          if (memberIds.length > 0) {
+            // Build query for assigned tasks
+            let assignedQuery = supabaseAdmin
+              .from('todos')
+              .select(`
+                *,
+                creator:profiles!todos_user_id_fkey(id, full_name),
+                assignee:profiles!todos_assigned_to_fkey(id, full_name),
+                assigner:profiles!todos_assigned_by_fkey(id, full_name),
+                suggester:profiles!todos_suggested_by_fkey(id, full_name),
+                group:groups(id, name)
+              `)
+              .eq('todo_type', 'assigned')
+              .eq('completed', false)
+              .in('assigned_to', memberIds)
+              .order('created_at', { ascending: false });
+            
+            const { data: assigned, error: assignedError } = await assignedQuery;
+            
+            if (!assignedError && assigned) {
+              assignedTodos = assigned;
+            }
+          }
+
+          // Combine and sort
+          const allTodos = [...(groupTodos || []), ...assignedTodos]
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          
+          return res.json(allTodos);
+        } else {
+          return res.json([]);
+        }
+      } else if (type === 'assigned') {
+        // Show assigned todos + confirmed group todos for user's groups
+        const groupIds = [...(membership ? [membership.group_id] : []), ...leaderGroupIds];
+        
+        // We need to fetch both assigned todos and confirmed group todos
+        // First get assigned todos
+        const { data: assignedTodos, error: assignedError } = await supabaseAdmin
+          .from('todos')
+          .select(`
+            *,
+            creator:profiles!todos_user_id_fkey(id, full_name),
+            assignee:profiles!todos_assigned_to_fkey(id, full_name),
+            assigner:profiles!todos_assigned_by_fkey(id, full_name),
+            suggester:profiles!todos_suggested_by_fkey(id, full_name),
+            group:groups(id, name)
+          `)
+          .eq('todo_type', 'assigned')
+          .or(`assigned_to.eq.${req.user.id},assigned_by.eq.${req.user.id}`)
+          .order('created_at', { ascending: false });
+
+        if (assignedError) return res.status(500).json({ error: assignedError.message });
+
+        // Then get confirmed group todos if user is in a group
+        let confirmedGroupTodos = [];
+        if (groupIds.length > 0) {
+          const { data: groupTodos, error: groupError } = await supabaseAdmin
+            .from('todos')
+            .select(`
+              *,
+              creator:profiles!todos_user_id_fkey(id, full_name),
+              assignee:profiles!todos_assigned_to_fkey(id, full_name),
+              assigner:profiles!todos_assigned_by_fkey(id, full_name),
+              suggester:profiles!todos_suggested_by_fkey(id, full_name),
+              group:groups(id, name)
+            `)
+            .eq('todo_type', 'group')
+            .eq('is_confirmed', true)
+            .in('group_id', groupIds)
+            .order('created_at', { ascending: false });
+
+          if (groupError) return res.status(500).json({ error: groupError.message });
+          confirmedGroupTodos = groupTodos || [];
+        }
+
+        // Combine and sort by created_at
+        const allTodos = [...(assignedTodos || []), ...confirmedGroupTodos]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        return res.json(allTodos);
+      } else if (type === 'global') {
+        // Global tab shows: global todos + confirmed group todos (not completed) + assigned tasks (not completed)
+        // Exclude: personal, unconfirmed group, completed tasks
+        query = query.or('todo_type.eq.global,and(todo_type.eq.group,is_confirmed.eq.true,completed.eq.false),and(todo_type.eq.assigned,completed.eq.false)');
+      }
+    } else {
+      // No type filter - get all accessible todos
+      // Build OR conditions for accessible todos
+      const orConditions = [
+        `todo_type.eq.personal,user_id.eq.${req.user.id}`,
+        'todo_type.eq.global'
+      ];
+
+      if (membership || leaderGroupIds.length > 0) {
+        const groupIds = [...(membership ? [membership.group_id] : []), ...leaderGroupIds];
+        orConditions.push(`todo_type.eq.group,group_id.in.(${groupIds.join(',')})`);
+      }
+
+      orConditions.push(`todo_type.eq.assigned,assigned_to.eq.${req.user.id}`);
+      orConditions.push(`todo_type.eq.assigned,assigned_by.eq.${req.user.id}`);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// Create todo
 app.post('/api/todos', auth, async (req, res) => {
-  const { task } = req.body;
-  const { data, error } = await supabaseAdmin
-    .from('todos')
-    .insert({ user_id: req.user.id, task })
-    .select()
-    .single();
-  
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    const { task, todo_type = 'personal', group_id, assigned_to } = req.body;
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role, is_leader')
+      .eq('id', req.user.id)
+      .single();
+
+    const todoData = {
+      user_id: req.user.id,
+      task,
+      todo_type,
+      is_confirmed: true // Default to confirmed for personal todos
+    };
+
+    // Handle different todo types
+    if (todo_type === 'global') {
+      // Only coordinators can create global todos
+      if (profile?.role !== 'coordinator') {
+        return res.status(403).json({ error: 'Only coordinators can create global todos' });
+      }
+    } else if (todo_type === 'group') {
+      // Anyone in the group can suggest, but needs leader confirmation
+      if (!group_id) {
+        return res.status(400).json({ error: 'Group ID is required for group todos' });
+      }
+
+      // Check if user is member or leader of this group
+      const { data: group } = await supabaseAdmin
+        .from('groups')
+        .select('leader_id')
+        .eq('id', group_id)
+        .single();
+
+      const isLeader = group?.leader_id === req.user.id;
+
+      const { data: membership } = await supabaseAdmin
+        .from('group_members')
+        .select('id')
+        .eq('group_id', group_id)
+        .eq('user_id', req.user.id)
+        .single();
+
+      if (!isLeader && !membership) {
+        return res.status(403).json({ error: 'You must be a member of this group' });
+      }
+
+      todoData.group_id = group_id;
+      todoData.suggested_by = req.user.id;
+      todoData.is_confirmed = isLeader; // Auto-confirm if created by leader
+    } else if (todo_type === 'assigned') {
+      // Only leaders or coordinators can assign tasks
+      const isCoordinator = profile?.role === 'coordinator';
+      const isLeaderProfile = profile?.is_leader === true;
+      
+      if (!isCoordinator && !isLeaderProfile) {
+        return res.status(403).json({ error: 'Only leaders or coordinators can assign tasks' });
+      }
+      if (!assigned_to) {
+        return res.status(400).json({ error: 'Assignee is required for assigned todos' });
+      }
+
+      // Leaders can always assign to themselves, otherwise check group membership
+      const isSelfAssign = String(assigned_to) === String(req.user.id);
+      
+      if (isLeaderProfile && !isCoordinator && !isSelfAssign) {
+        // Only check group membership if assigning to someone else
+        const { data: leaderGroups } = await supabaseAdmin
+          .from('groups')
+          .select('id')
+          .eq('leader_id', req.user.id);
+
+        const leaderGroupIds = leaderGroups?.map(g => g.id) || [];
+
+        const { data: assigneeMembership } = await supabaseAdmin
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', assigned_to)
+          .single();
+
+        if (!assigneeMembership || !leaderGroupIds.includes(assigneeMembership.group_id)) {
+          return res.status(403).json({ error: 'You can only assign tasks to members of your group' });
+        }
+      }
+
+      todoData.assigned_to = assigned_to;
+      todoData.assigned_by = req.user.id;
+      todoData.is_confirmed = true;
+      todoData.date_assigned = new Date().toISOString();
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('todos')
+      .insert(todoData)
+      .select(`
+        *,
+        creator:profiles!todos_user_id_fkey(id, full_name),
+        assignee:profiles!todos_assigned_to_fkey(id, full_name),
+        assigner:profiles!todos_assigned_by_fkey(id, full_name),
+        group:groups(id, name)
+      `)
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// Update todo (mark complete, edit task)
 app.put('/api/todos/:id', auth, async (req, res) => {
-  const { completed } = req.body;
-  const { error } = await supabaseAdmin
-    .from('todos')
-    .update({ completed })
-    .eq('id', req.params.id)
-    .eq('user_id', req.user.id);
-  
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+  try {
+    const { completed, task, is_confirmed } = req.body;
+    const { data: todo } = await supabaseAdmin
+      .from('todos')
+      .select('*, group:groups(leader_id)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!todo) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role, is_leader')
+      .eq('id', req.user.id)
+      .single();
+
+    const isCoordinator = profile?.role === 'coordinator';
+    const isOwner = todo.user_id === req.user.id;
+    const isGroupLeader = todo.group?.leader_id === req.user.id;
+    const isAssigner = todo.assigned_by === req.user.id;
+    const isAssignee = todo.assigned_to === req.user.id;
+
+    // Check permissions based on todo type
+    let canUpdate = false;
+    let updateData = {};
+
+    if (todo.todo_type === 'personal') {
+      canUpdate = isOwner;
+      if (canUpdate) updateData = { completed, task };
+    } else if (todo.todo_type === 'global') {
+      canUpdate = isCoordinator;
+      if (canUpdate) updateData = { completed, task };
+    } else if (todo.todo_type === 'group') {
+      // Check if user is a member of this group
+      const { data: membership } = await supabaseAdmin
+        .from('group_members')
+        .select('id')
+        .eq('group_id', todo.group_id)
+        .eq('user_id', req.user.id)
+        .single();
+      
+      const isGroupMember = !!membership;
+      
+      if (isGroupLeader || isCoordinator) {
+        // Leaders can directly complete/edit group todos
+        canUpdate = true;
+        updateData = { completed, task, is_confirmed, pending_completion: false };
+      } else if (isGroupMember && todo.is_confirmed) {
+        // Group members can request completion for confirmed group todos
+        canUpdate = true;
+        if (completed === true && !todo.completed) {
+          // Member requests completion - needs leader approval
+          updateData = { pending_completion: true };
+        } else if (completed === false) {
+          // Member can uncheck pending_completion
+          updateData = { pending_completion: false };
+        }
+      }
+    } else if (todo.todo_type === 'assigned') {
+      // Self-assigned tasks (leader assigned to themselves) can be completed directly
+      const isSelfAssigned = todo.assigned_to === todo.assigned_by;
+      
+      if (isSelfAssigned && isAssignee) {
+        // Leader completing their own self-assigned task - no approval needed
+        canUpdate = true;
+        updateData = { completed, task, pending_completion: false };
+      } else if (isAssignee && !isAssigner && !isCoordinator) {
+        canUpdate = true;
+        // If assignee tries to mark complete, set pending_completion instead
+        if (completed === true && !todo.completed) {
+          updateData = { pending_completion: true };
+        } else if (completed === false) {
+          // Assignee can uncheck pending_completion
+          updateData = { pending_completion: false };
+        }
+      } else if (isAssigner || isCoordinator) {
+        canUpdate = true;
+        updateData = { completed, task, pending_completion: false };
+      }
+    }
+
+    if (!canUpdate) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) delete updateData[key];
+    });
+
+    const { error } = await supabaseAdmin
+      .from('todos')
+      .update(updateData)
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// Confirm group todo (leaders only)
+app.post('/api/todos/:id/confirm', auth, async (req, res) => {
+  try {
+    const { data: todo } = await supabaseAdmin
+      .from('todos')
+      .select('*, group:groups(leader_id)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!todo || todo.todo_type !== 'group') {
+      return res.status(404).json({ error: 'Group todo not found' });
+    }
+
+    if (todo.group?.leader_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the group leader can confirm todos' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('todos')
+      .update({ is_confirmed: true })
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Confirm completion of assigned or group task (leader/assigner only)
+app.post('/api/todos/:id/confirm-completion', auth, async (req, res) => {
+  try {
+    const { data: todo } = await supabaseAdmin
+      .from('todos')
+      .select('*, group:groups(leader_id)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!todo || (todo.todo_type !== 'assigned' && todo.todo_type !== 'group')) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    if (!todo.pending_completion) {
+      return res.status(400).json({ error: 'This task is not pending completion' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    const isCoordinator = profile?.role === 'coordinator';
+    const isAssigner = todo.assigned_by === req.user.id;
+    const isGroupLeader = todo.group?.leader_id === req.user.id;
+
+    // For assigned todos: assigner or coordinator can confirm
+    // For group todos: group leader or coordinator can confirm
+    const canConfirm = isCoordinator || 
+      (todo.todo_type === 'assigned' && isAssigner) ||
+      (todo.todo_type === 'group' && isGroupLeader);
+
+    if (!canConfirm) {
+      return res.status(403).json({ error: 'Only the leader or coordinator can confirm completion' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('todos')
+      .update({ completed: true, pending_completion: false })
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reject completion of assigned or group task (leader/assigner only)
+app.post('/api/todos/:id/reject-completion', auth, async (req, res) => {
+  try {
+    const { data: todo } = await supabaseAdmin
+      .from('todos')
+      .select('*, group:groups(leader_id)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!todo || (todo.todo_type !== 'assigned' && todo.todo_type !== 'group')) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    if (!todo.pending_completion) {
+      return res.status(400).json({ error: 'This task is not pending completion' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    const isCoordinator = profile?.role === 'coordinator';
+    const isAssigner = todo.assigned_by === req.user.id;
+    const isGroupLeader = todo.group?.leader_id === req.user.id;
+
+    // For assigned todos: assigner or coordinator can reject
+    // For group todos: group leader or coordinator can reject
+    const canReject = isCoordinator || 
+      (todo.todo_type === 'assigned' && isAssigner) ||
+      (todo.todo_type === 'group' && isGroupLeader);
+
+    if (!canReject) {
+      return res.status(403).json({ error: 'Only the leader or coordinator can reject completion' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('todos')
+      .update({ pending_completion: false })
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete todo
 app.delete('/api/todos/:id', auth, async (req, res) => {
-  const { error } = await supabaseAdmin
-    .from('todos')
-    .delete()
-    .eq('id', req.params.id)
-    .eq('user_id', req.user.id);
-  
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+  try {
+    const { data: todo } = await supabaseAdmin
+      .from('todos')
+      .select('*, group:groups(leader_id)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!todo) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    const isCoordinator = profile?.role === 'coordinator';
+    const isOwner = todo.user_id === req.user.id;
+    const isGroupLeader = todo.group?.leader_id === req.user.id;
+    const isAssigner = todo.assigned_by === req.user.id;
+
+    let canDelete = false;
+
+    if (todo.todo_type === 'personal') {
+      canDelete = isOwner;
+    } else if (todo.todo_type === 'global') {
+      canDelete = isCoordinator;
+    } else if (todo.todo_type === 'group') {
+      canDelete = isGroupLeader || isCoordinator;
+    } else if (todo.todo_type === 'assigned') {
+      canDelete = isAssigner || isCoordinator;
+    }
+
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('todos')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Overtime request endpoints

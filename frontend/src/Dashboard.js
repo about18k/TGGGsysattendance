@@ -25,6 +25,11 @@ function Dashboard({ token, user, onLogout }) {
   const [filterSession, setFilterSession] = useState('all');
   const [filterDate, setFilterDate] = useState('');
   
+  // Coordinator management states
+  const [showLeaderPanel, setShowLeaderPanel] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const [allTodos, setAllTodos] = useState([]);
+  
   // Get current date/time in Philippines timezone (UTC+8)
   const getPhilippinesDate = () => {
     const phTime = toZonedTime(new Date(), 'Asia/Manila');
@@ -164,6 +169,8 @@ function Dashboard({ token, user, onLogout }) {
       const promises = [fetchAttendance(), fetchUserProfile()];
       if (user.role === 'coordinator') {
         promises.push(fetchInterns());
+        promises.push(fetchGroups());
+        promises.push(fetchAllTodos());
       }
       await Promise.all(promises);
       setLoading(false);
@@ -208,6 +215,74 @@ function Dashboard({ token, user, onLogout }) {
     } catch (err) {
       console.error('Failed to fetch interns:', err);
     }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const { data } = await axios.get(`${API}/groups`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setGroups(data);
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
+    }
+  };
+
+  const fetchAllTodos = async () => {
+    try {
+      // Fetch assigned tasks for coordinator monitoring
+      const { data } = await axios.get(`${API}/todos?type=assigned`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAllTodos(data);
+    } catch (err) {
+      console.error('Failed to fetch todos:', err);
+    }
+  };
+
+  const toggleLeader = async (userId, isCurrentlyLeader) => {
+    try {
+      const endpoint = isCurrentlyLeader ? 'remove-leader' : 'make-leader';
+      await axios.post(`${API}/users/${userId}/${endpoint}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchInterns();
+      fetchGroups();
+      showAlert('success', 'Success', isCurrentlyLeader ? 'Leader role removed.' : 'Leader role assigned.');
+    } catch (error) {
+      showAlert('error', 'Error', error.response?.data?.error || 'Failed to update leader status.');
+    }
+  };
+
+  const deleteGroup = async (groupId, groupName) => {
+    if (!window.confirm(`Are you sure you want to delete the group "${groupName}"? This will remove all members from the group.`)) {
+      return;
+    }
+    try {
+      await axios.delete(`${API}/groups/${groupId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchGroups();
+      fetchInterns();
+      showAlert('success', 'Group Deleted', `"${groupName}" has been disbanded.`);
+    } catch (error) {
+      showAlert('error', 'Error', error.response?.data?.error || 'Failed to delete group.');
+    }
+  };
+
+  // Helper to find intern's group
+  const getInternGroup = (internId) => {
+    for (const group of groups) {
+      if (group.members?.some(m => m.user_id === internId)) {
+        return group;
+      }
+    }
+    return null;
+  };
+
+  // Helper to get leader's task count
+  const getLeaderTaskCount = (leaderId) => {
+    return allTodos.filter(t => t.assigned_by === leaderId && t.todo_type === 'assigned').length;
   };
 
   const checkIn = async () => {
@@ -351,6 +426,331 @@ function Dashboard({ token, user, onLogout }) {
             </div>
           </div>
         </div>
+
+        {/* Coordinator Management Panel */}
+        {user.role === 'coordinator' && (
+          <div className="coordinator-panel" style={{marginBottom: '2rem'}}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1rem'
+            }}>
+              <h3 style={{margin: 0, color: '#e8eaed'}}>👑 Coordinator Panel</h3>
+              <button
+                onClick={() => setShowLeaderPanel(!showLeaderPanel)}
+                style={{
+                  background: showLeaderPanel ? '#FF7120' : 'transparent',
+                  border: '1px solid #FF7120',
+                  color: showLeaderPanel ? 'white' : '#FF7120',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                {showLeaderPanel ? 'Hide Details' : 'Manage Leaders & Monitor'}
+              </button>
+            </div>
+
+            {/* Quick Stats */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: '1rem',
+              marginBottom: showLeaderPanel ? '1.5rem' : 0
+            }}>
+              <div style={{
+                background: '#00273C',
+                padding: '1rem',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                textAlign: 'center'
+              }}>
+                <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#FF7120'}}>
+                  {interns.filter(i => i.is_leader).length}
+                </div>
+                <div style={{color: '#a0a4a8', fontSize: '0.85rem'}}>Leaders</div>
+              </div>
+              <div style={{
+                background: '#00273C',
+                padding: '1rem',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                textAlign: 'center'
+              }}>
+                <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#28a745'}}>
+                  {groups.length}
+                </div>
+                <div style={{color: '#a0a4a8', fontSize: '0.85rem'}}>Groups</div>
+              </div>
+              <div style={{
+                background: '#00273C',
+                padding: '1rem',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                textAlign: 'center'
+              }}>
+                <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#17a2b8'}}>
+                  {allTodos.filter(t => !t.completed).length}
+                </div>
+                <div style={{color: '#a0a4a8', fontSize: '0.85rem'}}>Active Tasks</div>
+              </div>
+              <div style={{
+                background: '#00273C',
+                padding: '1rem',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                textAlign: 'center'
+              }}>
+                <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#ffc107'}}>
+                  {allTodos.filter(t => t.pending_completion).length}
+                </div>
+                <div style={{color: '#a0a4a8', fontSize: '0.85rem'}}>Pending Approval</div>
+              </div>
+            </div>
+
+            {/* Expanded Panel */}
+            {showLeaderPanel && (
+              <div style={{
+                background: '#001824',
+                borderRadius: '12px',
+                padding: '1.5rem',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                {/* Leader Management Section */}
+                <div style={{marginBottom: '2rem'}}>
+                  <h4 style={{margin: '0 0 1rem 0', color: '#e8eaed'}}>👤 Assign Leaders</h4>
+                  <div style={{
+                    display: 'grid',
+                    gap: '0.5rem',
+                    maxHeight: '300px',
+                    overflowY: 'auto'
+                  }}>
+                    {interns.map(intern => {
+                      const internGroup = getInternGroup(intern.id);
+                      const taskCount = intern.is_leader ? getLeaderTaskCount(intern.id) : 0;
+                      return (
+                      <div key={intern.id} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: '#00273C',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '8px',
+                        border: intern.is_leader ? '1px solid rgba(255, 113, 32, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)'
+                      }}>
+                        <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1}}>
+                          <span style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            background: intern.is_leader ? '#FF7120' : 'rgba(255, 255, 255, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontSize: '0.9rem',
+                            flexShrink: 0
+                          }}>
+                            {intern.is_leader ? '👑' : intern.full_name?.charAt(0) || '?'}
+                          </span>
+                          <div style={{flex: 1, minWidth: 0}}>
+                            <div style={{color: '#e8eaed', fontSize: '0.9rem'}}>{intern.full_name}</div>
+                            <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem'}}>
+                              <span style={{color: '#6b7280', fontSize: '0.75rem'}}>
+                                {intern.is_leader ? '👑 Leader' : 'Intern'}
+                              </span>
+                              {internGroup && (
+                                <span style={{
+                                  background: 'rgba(100, 100, 255, 0.1)',
+                                  color: '#6b8cff',
+                                  padding: '0.1rem 0.4rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.7rem'
+                                }}>
+                                  👥 {internGroup.name}
+                                </span>
+                              )}
+                              {intern.is_leader && taskCount > 0 && (
+                                <span style={{
+                                  background: 'rgba(255, 113, 32, 0.1)',
+                                  color: '#FF7120',
+                                  padding: '0.1rem 0.4rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.7rem'
+                                }}>
+                                  📋 {taskCount} task{taskCount !== 1 ? 's' : ''} assigned
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => toggleLeader(intern.id, intern.is_leader)}
+                          style={{
+                            background: intern.is_leader ? 'rgba(255, 80, 80, 0.1)' : 'rgba(40, 167, 69, 0.1)',
+                            border: intern.is_leader ? '1px solid rgba(255, 80, 80, 0.3)' : '1px solid rgba(40, 167, 69, 0.3)',
+                            color: intern.is_leader ? '#ff5050' : '#28a745',
+                            padding: '0.4rem 0.75rem',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            flexShrink: 0
+                          }}
+                        >
+                          {intern.is_leader ? 'Remove Leader' : 'Make Leader'}
+                        </button>
+                      </div>
+                    );})}
+                  </div>
+                </div>
+
+                {/* Groups Overview */}
+                <div style={{marginBottom: '2rem'}}>
+                  <h4 style={{margin: '0 0 1rem 0', color: '#e8eaed'}}>👥 Groups Overview</h4>
+                  {groups.length === 0 ? (
+                    <p style={{color: '#6b7280', fontSize: '0.9rem'}}>No groups created yet.</p>
+                  ) : (
+                    <div style={{display: 'grid', gap: '0.75rem'}}>
+                      {groups.map(group => {
+                        const leaderTaskCount = getLeaderTaskCount(group.leader_id);
+                        return (
+                        <div key={group.id} style={{
+                          background: '#00273C',
+                          padding: '1rem',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(255, 255, 255, 0.1)'
+                        }}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem'}}>
+                            <div>
+                              <span style={{color: '#e8eaed', fontWeight: '500', fontSize: '1rem'}}>{group.name}</span>
+                              <div style={{display: 'flex', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap'}}>
+                                <span style={{
+                                  background: 'rgba(255, 113, 32, 0.1)',
+                                  color: '#FF7120',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem'
+                                }}>
+                                  {group.members?.length || 0} member{(group.members?.length || 0) !== 1 ? 's' : ''}
+                                </span>
+                                {leaderTaskCount > 0 && (
+                                  <span style={{
+                                    background: 'rgba(100, 255, 100, 0.1)',
+                                    color: '#28a745',
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.75rem'
+                                  }}>
+                                    📋 {leaderTaskCount} task{leaderTaskCount !== 1 ? 's' : ''}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => deleteGroup(group.id, group.name)}
+                              style={{
+                                background: 'rgba(255, 80, 80, 0.1)',
+                                border: '1px solid rgba(255, 80, 80, 0.3)',
+                                color: '#ff5050',
+                                padding: '0.35rem 0.6rem',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem'
+                              }}
+                            >
+                              🗑️ Disband
+                            </button>
+                          </div>
+                          <div style={{color: '#6b7280', fontSize: '0.8rem', marginBottom: '0.5rem'}}>
+                            👑 Leader: <span style={{color: '#FF7120'}}>{group.leader?.full_name || 'None'}</span>
+                          </div>
+                          {/* Members List */}
+                          {group.members && group.members.length > 0 && (
+                            <div style={{marginTop: '0.5rem'}}>
+                              <div style={{color: '#6b7280', fontSize: '0.75rem', marginBottom: '0.5rem'}}>Members:</div>
+                              <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.4rem'}}>
+                                {group.members.map(member => (
+                                  <span
+                                    key={member.user_id}
+                                    style={{
+                                      background: member.user_id === group.leader_id ? 'rgba(255, 113, 32, 0.2)' : 'rgba(100, 100, 255, 0.1)',
+                                      color: member.user_id === group.leader_id ? '#FF7120' : '#6b8cff',
+                                      padding: '0.25rem 0.5rem',
+                                      borderRadius: '4px',
+                                      fontSize: '0.75rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem'
+                                    }}
+                                  >
+                                    {member.user_id === group.leader_id && '👑'}
+                                    {member.user?.full_name || 'Unknown'}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );})}
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent Assigned Tasks Monitor */}
+                <div>
+                  <h4 style={{margin: '0 0 1rem 0', color: '#e8eaed'}}>📋 Recent Assigned Tasks</h4>
+                  {allTodos.filter(t => t.todo_type === 'assigned').length === 0 ? (
+                    <p style={{color: '#6b7280', fontSize: '0.9rem'}}>No assigned tasks yet.</p>
+                  ) : (
+                    <div style={{display: 'grid', gap: '0.5rem', maxHeight: '250px', overflowY: 'auto'}}>
+                      {allTodos.filter(t => t.todo_type === 'assigned').slice(0, 10).map(todo => (
+                        <div key={todo.id} style={{
+                          background: '#00273C',
+                          padding: '0.75rem 1rem',
+                          borderRadius: '8px',
+                          border: `1px solid ${
+                            todo.completed ? 'rgba(40, 167, 69, 0.3)' : 
+                            todo.pending_completion ? 'rgba(255, 165, 0, 0.3)' : 
+                            'rgba(255, 255, 255, 0.1)'
+                          }`
+                        }}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                            <span style={{
+                              color: todo.completed ? '#6b7280' : '#e8eaed',
+                              fontSize: '0.85rem',
+                              textDecoration: todo.completed ? 'line-through' : 'none'
+                            }}>
+                              {todo.task.replace(/\[.*?\]\s*/, '').substring(0, 40)}...
+                            </span>
+                            <span style={{
+                              background: todo.completed ? 'rgba(40, 167, 69, 0.2)' : 
+                                          todo.pending_completion ? 'rgba(255, 165, 0, 0.2)' : 
+                                          'rgba(255, 113, 32, 0.2)',
+                              color: todo.completed ? '#28a745' : 
+                                     todo.pending_completion ? '#ffa500' : 
+                                     '#FF7120',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '4px',
+                              fontSize: '0.7rem'
+                            }}>
+                              {todo.completed ? '✓ Done' : todo.pending_completion ? '⏳ Pending' : 'Active'}
+                            </span>
+                          </div>
+                          <div style={{display: 'flex', gap: '1rem', marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
+                            <span>To: {todo.assignee?.full_name || 'Unknown'}</span>
+                            <span>By: {todo.assigner?.full_name || 'Unknown'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {user.role === 'intern' && (
           loading ? (
