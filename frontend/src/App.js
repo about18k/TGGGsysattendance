@@ -11,6 +11,7 @@ import Reports from './Reports';
 import OvertimeForm from './OvertimeForm';
 import OvertimeStatus from './OvertimeStatus';
 import OvertimeRequests from './OvertimeRequests';
+import NotificationPanel from './components/NotificationPanel';
 import './App.css';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -107,25 +108,30 @@ function App() {
 
   const handleNotificationClick = async (notification) => {
     try {
-      // Mark as read
       await axios.put(`${API}/notifications/${notification.id}/read`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      // Update local state
       setNotifications(prev => 
         prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n)
       );
-      
-      // Navigate to page
-      if (notification.link) {
-        changePage(notification.link);
-      }
-      
-      // Close menu
+      if (notification.link) changePage(notification.link);
       setShowNotifMenu(false);
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+      await Promise.all(unreadIds.map(id => 
+        axios.put(`${API}/notifications/${id}/read`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ));
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.error('Failed to mark all as read:', err);
     }
   };
 
@@ -372,41 +378,14 @@ function App() {
                     right: window.innerWidth < 768 ? 'auto' : '0',
                     left: window.innerWidth < 768 ? '50%' : 'auto',
                     transform: window.innerWidth < 768 ? 'translate(-50%, -50%)' : 'none',
-                    minWidth: '280px', 
-                    maxWidth: window.innerWidth < 768 ? 'calc(100vw - 3rem)' : '320px', 
-                    width: window.innerWidth < 768 ? 'auto' : '320px',
                     zIndex: 1000,
-                    maxHeight: window.innerWidth < 768 ? '80vh' : '400px',
-                    overflowY: 'auto'
+                    padding: 0
                   }}>
-                    {notifications.length === 0 ? (
-                      <div style={{ padding: '0.75rem 1rem', color: '#a0a4a8' }}>No notifications</div>
-                    ) : (
-                      notifications.map(item => (
-                        <div 
-                          key={item.id} 
-                          onClick={() => handleNotificationClick(item)}
-                          style={{ 
-                            padding: '0.75rem 1rem', 
-                            borderBottom: '1px solid rgba(255,255,255,0.06)', 
-                            color: '#e8eaed',
-                            cursor: 'pointer',
-                            background: item.is_read ? 'transparent' : 'rgba(255, 113, 32, 0.05)',
-                            transition: 'background 0.2s'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 113, 32, 0.1)'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = item.is_read ? 'transparent' : 'rgba(255, 113, 32, 0.05)'}
-                        >
-                          <div style={{ fontWeight: '700', marginBottom: '4px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <span style={{ flex: '1 1 auto', minWidth: '0', wordBreak: 'break-word' }}>{item.title}</span>
-                            {!item.is_read && (
-                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF7120', flexShrink: 0 }}></span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', color: '#a0a4a8', lineHeight: '1.4', wordBreak: 'break-word' }}>{item.message}</div>
-                        </div>
-                      ))
-                    )}
+                    <NotificationPanel 
+                      notifications={notifications}
+                      onNotificationClick={handleNotificationClick}
+                      onMarkAllRead={handleMarkAllRead}
+                    />
                   </div>
                 </>
               )}
