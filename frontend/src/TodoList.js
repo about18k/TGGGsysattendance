@@ -936,24 +936,48 @@ function TodoList({ token, user }) {
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {activeTab === 'group' && todo.todo_type === 'group' && todo.is_confirmed === false &&
             groups.find(g => g.id === todo.group_id)?.leader_id === userProfile?.id && (
-              <button
-                onClick={() => openConfirmModal(todo)}
-                style={{
-                  flex: 1,
-                  background: '#28a745',
-                  border: 'none',
-                  color: 'white',
-                  padding: '0.65rem 1rem',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem'
-                }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', justifyContent: 'center', width: '100%' }}>
-                  <Icon name="check" size={14} color="white" strokeWidth={2} />
-                  Confirm Task
-                </span>
-              </button>
+              <>
+                <button
+                  onClick={() => openConfirmModal(todo)}
+                  style={{
+                    flex: 1,
+                    background: '#28a745',
+                    border: 'none',
+                    color: 'white',
+                    padding: '0.65rem 1rem',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', justifyContent: 'center', width: '100%' }}>
+                    <Icon name="check" size={14} color="white" strokeWidth={2} />
+                    Confirm Task
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to reject this suggested task? This will delete it.')) {
+                      deleteTodo(todo.id);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    background: '#dc3545',
+                    border: 'none',
+                    color: 'white',
+                    padding: '0.65rem 1rem',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', justifyContent: 'center', width: '100%' }}>
+                    <Icon name="x" size={14} color="white" strokeWidth={2} />
+                    Reject
+                  </span>
+                </button>
+              </>
             )}
           {(
             ((activeTab === 'group' || activeTab === 'team') && todo.todo_type === 'assigned' && todo.assigned_to === userProfile?.id) ||
