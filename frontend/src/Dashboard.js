@@ -1251,10 +1251,10 @@ function Dashboard({ token, user, onLogout }) {
                         </>
                       ) : (
                         <>
-                          <th>Morning In</th>
-                          <th>Morning Out</th>
-                          <th>Afternoon In</th>
-                          <th>Afternoon Out</th>
+                          <th>AM In</th>
+                          <th>AM Out</th>
+                          <th>PM In</th>
+                          <th>PM Out</th>
                           <th>OT In</th>
                           <th>OT Out</th>
                           <th>Total Hours</th>
