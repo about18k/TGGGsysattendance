@@ -939,31 +939,7 @@ function Dashboard({ token, user, onLogout }) {
                   <label style={{ display: 'block', marginBottom: '0.5rem', color: '#a0a4a8', fontSize: '0.9rem' }}>
                     Attachments (Optional)
                   </label>
-                  <textarea
-                    value={workDoc}
-                    onChange={(e) => setWorkDoc(e.target.value)}
-                    placeholder="Example: Completed database design, attended team meeting, fixed bug #123..."
-                    disabled={!todaysOpen}
-                    style={{
-                      width: '100%',
-                      minHeight: '150px',
-                      padding: '0.75rem',
-                      background: '#00273C',
-                      color: '#e8eaed',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '8px',
-                      fontSize: '0.9rem',
-                      resize: 'vertical',
-                      fontFamily: 'inherit',
-                      opacity: todaysOpen ? 1 : 0.5
-                    }}
-                  />
-
-                  <div style={{ marginTop: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#a0a4a8', fontSize: '0.9rem' }}>
-                      Attachments (Optional)
-                    </label>
-                    <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'relative' }}>
                       <input
                         type="file"
                         accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
@@ -1053,10 +1029,9 @@ function Dashboard({ token, user, onLogout }) {
                   </div>
                 </div>
               </div>
-            </div >
+          
           )
-        )
-        }
+        )}
 
         <div className="attendance-table">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.75rem 2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', flexWrap: 'wrap', gap: '1rem' }}>
@@ -1217,23 +1192,47 @@ function Dashboard({ token, user, onLogout }) {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 {a.attachments.map((url, idx) => {
                                   const fileName = url.split('/').pop().split('?')[0];
+                                  const decodedName = decodeURIComponent(fileName);
                                   const ext = fileName.split('.').pop().toLowerCase();
+                                  const getFileIcon = (extension) => {
+                                    if (['png', 'jpg', 'jpeg'].includes(extension)) return '🖼️';
+                                    if (['pdf'].includes(extension)) return '📄';
+                                    if (['doc', 'docx'].includes(extension)) return '📝';
+                                    if (['xls', 'xlsx'].includes(extension)) return '📊';
+                                    if (['txt'].includes(extension)) return '📃';
+                                    return '📎';
+                                  };
                                   return (
                                     <a
                                       key={idx}
                                       href={url}
                                       target="_blank"
                                       rel="noopener noreferrer"
+                                      title={decodedName}
                                       style={{
                                         color: '#FF7120',
                                         textDecoration: 'none',
                                         fontSize: '0.8rem',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '4px'
+                                        gap: '4px',
+                                        padding: '4px 8px',
+                                        background: 'rgba(255, 113, 32, 0.1)',
+                                        borderRadius: '4px',
+                                        border: '1px solid rgba(255, 113, 32, 0.2)',
+                                        transition: 'all 0.2s',
+                                        cursor: 'pointer'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.target.style.background = 'rgba(255, 113, 32, 0.2)';
+                                        e.target.style.borderColor = '#FF7120';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.target.style.background = 'rgba(255, 113, 32, 0.1)';
+                                        e.target.style.borderColor = 'rgba(255, 113, 32, 0.2)';
                                       }}
                                     >
-                                      📎 {ext}
+                                      {getFileIcon(ext)} {decodedName.length > 15 ? decodedName.substring(0, 15) + '...' : decodedName}
                                     </a>
                                   );
                                 })}
@@ -1344,14 +1343,12 @@ function Dashboard({ token, user, onLogout }) {
             >
               Close
             </button>
-          </div >
-        </div >
-      )
-      }
+          </div>
+        </div>
+      )}
 
-      {
-        fullscreenPhoto && (
-          <div
+      {fullscreenPhoto && (
+        <div
             style={{
               position: 'fixed',
               top: 0,
@@ -1399,9 +1396,8 @@ function Dashboard({ token, user, onLogout }) {
               ×
             </button>
           </div>
-        )
-      }
-    </div >
+        )}
+    </div>
   );
 }
 

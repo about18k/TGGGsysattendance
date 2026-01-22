@@ -462,7 +462,15 @@ function OvertimeRequests({ token }) {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 bg-blue-950 text-gray-300 border border-orange-500/30 rounded-lg text-sm cursor-pointer hover:border-orange-500/50"
+              style={{
+                padding: '0.5rem 1rem',
+                background: '#00273C',
+                color: '#e8eaed',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
             >
               <option value="all">All Status</option>
               <option value="Pending">Pending</option>
@@ -471,7 +479,15 @@ function OvertimeRequests({ token }) {
             <select
               value={filterEmployee}
               onChange={(e) => setFilterEmployee(e.target.value)}
-              className="px-4 py-2 bg-blue-950 text-gray-300 border border-orange-500/30 rounded-lg text-sm cursor-pointer hover:border-orange-500/50"
+              style={{
+                padding: '0.5rem 1rem',
+                background: '#00273C',
+                color: '#e8eaed',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
             >
               <option value="all">All Employees</option>
               {[...new Set(requests.map(r => r.full_name || r.employee_name))].map(name => (
@@ -484,7 +500,15 @@ function OvertimeRequests({ token }) {
               onChange={(e) => setFilterDate(e.target.value)}
               min="2000-01-01"
               max="2026-12-31"
-              className="px-4 py-2 bg-blue-950 text-gray-300 border border-orange-500/30 rounded-lg text-sm cursor-pointer hover:border-orange-500/50"
+              style={{
+                padding: '0.5rem 1rem',
+                background: '#00273C',
+                color: '#e8eaed',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
             />
             {(filterStatus !== 'all' || filterEmployee !== 'all' || filterDate) && (
               <button
@@ -493,7 +517,16 @@ function OvertimeRequests({ token }) {
                   setFilterEmployee('all');
                   setFilterDate('');
                 }}
-                className="px-4 py-2 bg-orange-500/20 text-orange-500 border border-orange-500/30 rounded-lg text-sm cursor-pointer font-semibold hover:bg-orange-500/30"
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: 'rgba(255, 113, 32, 0.2)',
+                  color: '#FF7120',
+                  border: '1px solid rgba(255, 113, 32, 0.3)',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
               >
                 Clear Filters
               </button>
