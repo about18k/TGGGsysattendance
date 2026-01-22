@@ -217,7 +217,7 @@ function Dashboard({ token, user, onLogout }) {
     });
   };
 
-  const truncateText = (text, maxLength = 8) => {
+  const truncateText = (text, maxLength = 20) => {
     if (!text || text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
   };
