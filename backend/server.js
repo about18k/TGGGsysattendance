@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABAS
 app.use(cors());
 app.use(express.json());
 
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
@@ -23,7 +23,7 @@ const upload = multer({
   }
 });
 
-const uploadDocs = multer({ 
+const uploadDocs = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
@@ -48,18 +48,18 @@ const auth = async (req, res, next) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Auth session missing!' });
     }
-    
+
     const token = authHeader.split(' ')[1];
     if (!token) {
       return res.status(401).json({ error: 'Auth session missing!' });
     }
-    
+
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
       console.error('Auth error:', error);
       return res.status(401).json({ error: 'Auth session missing!' });
     }
-    
+
     req.user = user;
     next();
   } catch (err) {
@@ -72,45 +72,45 @@ app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return res.status(401).json({ error: 'Invalid credentials' });
-  
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name, role')
     .eq('id', data.user.id)
     .single();
-  
-  res.json({ 
-    token: data.session.access_token, 
-    role: profile?.role || 'intern', 
-    name: profile?.full_name || data.user.email 
+
+  res.json({
+    token: data.session.access_token,
+    role: profile?.role || 'intern',
+    name: profile?.full_name || data.user.email
   });
 });
 
 app.post('/api/signup', async (req, res) => {
   const { name, email, password } = req.body;
-  
+
   // Use admin client to create user with auto-confirmation
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
     email_confirm: true // Auto-confirm email
   });
-  
+
   if (error) return res.status(400).json({ error: error.message });
-  
+
   if (data.user) {
     // Create profile for the new user
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert({ 
-        id: data.user.id, 
-        full_name: name, 
-        role: 'intern' 
+      .insert({
+        id: data.user.id,
+        full_name: name,
+        role: 'intern'
       });
-    
+
     if (profileError) return res.status(500).json({ error: profileError.message });
   }
-  
+
   res.json({ message: 'Account created successfully' });
 });
 
@@ -122,20 +122,20 @@ app.post('/api/auth/google', async (req, res) => {
       console.error('Google auth error:', error);
       return res.status(401).json({ error: 'Invalid token' });
     }
-    
+
     let { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('full_name, role')
       .eq('id', user.id)
       .single();
-    
+
     if (!profile) {
       const { error: insertError } = await supabaseAdmin
         .from('profiles')
-        .insert({ 
-          id: user.id, 
-          full_name: user.user_metadata?.full_name || user.email, 
-          role: 'intern' 
+        .insert({
+          id: user.id,
+          full_name: user.user_metadata?.full_name || user.email,
+          role: 'intern'
         });
       if (insertError) {
         console.error('Profile creation error:', insertError);
@@ -143,10 +143,10 @@ app.post('/api/auth/google', async (req, res) => {
       }
       profile = { full_name: user.user_metadata?.full_name || user.email, role: 'intern' };
     }
-    
-    res.json({ 
-      role: profile.role, 
-      name: profile.full_name 
+
+    res.json({
+      role: profile.role,
+      name: profile.full_name
     });
   } catch (err) {
     console.error('Google auth exception:', err);
@@ -181,7 +181,7 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
     if (openSameDay) {
       return res.status(400).json({ error: 'Please check out your current session before checking in again.' });
     }
-    
+
     // Convert AM/PM time to 24-hour for comparison and compute deductions
     const timeIn24 = convertTo24Hour(time_in);
     const [h, m] = timeIn24.split(':').map(v => parseInt(v, 10));
@@ -213,44 +213,44 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
         lateDeduction = 1;
       }
     }
-    
+
     let photoUrl = null;
     if (req.file) {
       const fileExt = req.file.originalname.split('.').pop();
       const fileName = `${req.user.id}/${uuidv4()}.${fileExt}`;
-      
+
       const { error: uploadError } = await supabaseAdmin.storage
         .from('checkinphoto')
         .upload(fileName, req.file.buffer, {
           contentType: req.file.mimetype,
           upsert: false
         });
-      
+
       if (uploadError) {
         console.error('Photo upload error:', uploadError);
         return res.status(500).json({ error: uploadError.message });
       }
-      
+
       const { data: { publicUrl } } = supabaseAdmin.storage
         .from('checkinphoto')
         .getPublicUrl(fileName);
-      
+
       photoUrl = publicUrl;
     }
 
     const { data, error } = await supabaseAdmin
       .from('attendance')
-      .insert({ 
-        user_id: req.user.id, 
-        date, 
-        time_in, 
-        status, 
+      .insert({
+        user_id: req.user.id,
+        date,
+        time_in,
+        status,
         photo_path: photoUrl,
         late_deduction_hours: lateDeduction
       })
       .select()
       .single();
-    
+
     if (error) {
       console.error('Checkin error:', error);
       return res.status(500).json({ error: error.message });
@@ -278,7 +278,7 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
   try {
     const { time_out, work_documentation } = req.body;
     console.log('Checkout request:', { id: req.params.id, time_out, work_documentation, user_id: req.user.id });
-    
+
     const { data: entry, error: entryError } = await supabaseAdmin
       .from('attendance')
       .select('*')
@@ -295,23 +295,23 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
       for (const file of req.files) {
         const fileExt = file.originalname.split('.').pop();
         const fileName = `${req.user.id}/${uuidv4()}.${fileExt}`;
-        
+
         const { error: uploadError } = await supabaseAdmin.storage
           .from('workdocs')
           .upload(fileName, file.buffer, {
             contentType: file.mimetype,
             upsert: false
           });
-        
+
         if (uploadError) {
           console.error('File upload error:', uploadError);
           continue;
         }
-        
+
         const { data: { publicUrl } } = supabaseAdmin.storage
           .from('workdocs')
           .getPublicUrl(fileName);
-        
+
         attachmentUrls.push(publicUrl);
       }
     }
@@ -326,7 +326,7 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
       .update(updateData)
       .eq('id', req.params.id)
       .eq('user_id', req.user.id);
-    
+
     if (error) {
       console.error('Checkout error:', error);
       return res.status(500).json({ error: error.message });
@@ -363,7 +363,7 @@ app.put('/api/attendance/overtime-in/:id', auth, async (req, res) => {
     .update({ ot_time_in: otTimeIn })
     .eq('id', req.params.id)
     .eq('user_id', req.user.id);
-  
+
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
@@ -376,7 +376,7 @@ app.put('/api/attendance/overtime-out/:id', auth, async (req, res) => {
     .update({ ot_time_out: otTimeOut })
     .eq('id', req.params.id)
     .eq('user_id', req.user.id);
-  
+
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
@@ -387,16 +387,16 @@ app.get('/api/interns', auth, async (req, res) => {
     .select('role')
     .eq('id', req.user.id)
     .single();
-  
+
   if (profile?.role !== 'coordinator')
     return res.status(403).json({ error: 'Access denied' });
-  
+
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, full_name, profile_picture, is_leader')
     .eq('role', 'intern')
     .order('full_name');
-  
+
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
@@ -408,7 +408,7 @@ app.get('/api/attendance/my', auth, async (req, res) => {
     .eq('user_id', req.user.id)
     .order('date', { ascending: false })
     .order('time_in', { ascending: false });
-  
+
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
@@ -419,10 +419,10 @@ app.get('/api/attendance/all', auth, async (req, res) => {
     .select('role')
     .eq('id', req.user.id)
     .single();
-  
+
   if (profile?.role !== 'coordinator')
     return res.status(403).json({ error: 'Access denied' });
-  
+
   const { data, error } = await supabaseAdmin
     .from('attendance')
     .select(`
@@ -431,14 +431,14 @@ app.get('/api/attendance/all', auth, async (req, res) => {
     `)
     .order('date', { ascending: false })
     .order('time_in', { ascending: false });
-  
+
   if (error) return res.status(500).json({ error: error.message });
-  
+
   const formatted = data.map(a => ({
     ...a,
     full_name: a.profiles?.full_name
   }));
-  
+
   res.json(formatted);
 });
 
@@ -449,7 +449,7 @@ app.get('/api/profile', auth, async (req, res) => {
       .select('*')
       .eq('id', req.user.id)
       .single();
-    
+
     if (error) {
       console.error('Profile fetch error:', error);
       return res.status(500).json({ error: error.message });
@@ -467,7 +467,7 @@ app.put('/api/profile', auth, async (req, res) => {
     .from('profiles')
     .update({ full_name })
     .eq('id', req.user.id);
-  
+
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
@@ -475,7 +475,7 @@ app.put('/api/profile', auth, async (req, res) => {
 app.put('/api/profile/password', auth, async (req, res) => {
   try {
     const { password } = req.body;
-    
+
     if (!password || password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
@@ -485,12 +485,12 @@ app.put('/api/profile/password', auth, async (req, res) => {
       req.user.id,
       { password }
     );
-    
+
     if (error) {
       console.error('Password update error:', error);
       return res.status(500).json({ error: error.message });
     }
-    
+
     res.json({ success: true });
   } catch (err) {
     console.error('Password update exception:', err);
@@ -501,38 +501,38 @@ app.put('/api/profile/password', auth, async (req, res) => {
 app.post('/api/profile/picture', auth, upload.single('profile_pic'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    
+
     console.log('Profile pic upload:', { userId: req.user.id, fileName: req.file.originalname });
-    
+
     const fileExt = req.file.originalname.split('.').pop();
     const fileName = `${req.user.id}/profile.${fileExt}`;
-    
+
     const { error: uploadError } = await supabaseAdmin.storage
       .from('profilepicture')
       .upload(fileName, req.file.buffer, {
         contentType: req.file.mimetype,
         upsert: true
       });
-    
+
     if (uploadError) {
       console.error('Storage upload error:', uploadError);
       return res.status(500).json({ error: uploadError.message });
     }
-    
+
     const { data: { publicUrl } } = supabaseAdmin.storage
       .from('profilepicture')
       .getPublicUrl(fileName);
-    
+
     const { error } = await supabaseAdmin
       .from('profiles')
       .update({ profile_picture: publicUrl })
       .eq('id', req.user.id);
-    
+
     if (error) {
       console.error('Database update error:', error);
       return res.status(500).json({ error: error.message });
     }
-    
+
     console.log('Profile picture uploaded successfully:', publicUrl);
     res.json({ success: true, url: publicUrl });
   } catch (err) {
@@ -922,12 +922,68 @@ app.get('/api/todos', auth, async (req, res) => {
       if (type === 'personal') {
         query = query.eq('todo_type', 'personal').eq('user_id', req.user.id);
       } else if (type === 'group') {
-        // Show group todos for groups user is in or leads (only non-completed ones)
-        // Also show assigned tasks for members of those groups
-        const groupIds = [...(membership ? [membership.group_id] : []), ...leaderGroupIds];
-        if (groupIds.length > 0) {
-          // Get group todos
-          const { data: groupTodos, error: groupError } = await supabaseAdmin
+        // GROUP TAB (Leaders only): Show pending suggestions + pending completions
+        // Only accessible to leaders
+        if (!profile?.is_leader && leaderGroupIds.length === 0) {
+          return res.json([]);
+        }
+
+        const groupIds = leaderGroupIds;
+        if (groupIds.length === 0) {
+          return res.json([]);
+        }
+
+        // Get unconfirmed group todos (pending suggestions)
+        const { data: pendingSuggestions, error: suggestError } = await supabaseAdmin
+          .from('todos')
+          .select(`
+            *,
+            creator:profiles!todos_user_id_fkey(id, full_name),
+            assignee:profiles!todos_assigned_to_fkey(id, full_name),
+            assigner:profiles!todos_assigned_by_fkey(id, full_name),
+            suggester:profiles!todos_suggested_by_fkey(id, full_name),
+            group:groups(id, name)
+          `)
+          .eq('todo_type', 'group')
+          .in('group_id', groupIds)
+          .eq('is_confirmed', false)
+          .order('created_at', { ascending: false });
+
+        if (suggestError) return res.status(500).json({ error: suggestError.message });
+
+        // Get pending completion todos (awaiting leader approval)
+        const { data: pendingCompletion, error: pendingError } = await supabaseAdmin
+          .from('todos')
+          .select(`
+            *,
+            creator:profiles!todos_user_id_fkey(id, full_name),
+            assignee:profiles!todos_assigned_to_fkey(id, full_name),
+            assigner:profiles!todos_assigned_by_fkey(id, full_name),
+            suggester:profiles!todos_suggested_by_fkey(id, full_name),
+            group:groups(id, name)
+          `)
+          .eq('todo_type', 'group')
+          .in('group_id', groupIds)
+          .eq('pending_completion', true)
+          .eq('completed', false)
+          .order('created_at', { ascending: false });
+
+        if (pendingError) return res.status(500).json({ error: pendingError.message });
+
+        // Also get assigned tasks with pending completion for this group's members
+        const { data: groupMembers } = await supabaseAdmin
+          .from('group_members')
+          .select('user_id')
+          .in('group_id', groupIds);
+
+        // Include the leader (req.user.id) in the member list
+        const memberIds = [...(groupMembers?.map(m => m.user_id) || []), req.user.id];
+        let assignedPending = [];
+        let allAssignedTasks = [];
+
+        if (memberIds.length > 0) {
+          // Get pending completion assigned tasks
+          const { data: assigned, error: assignedError } = await supabaseAdmin
             .from('todos')
             .select(`
               *,
@@ -937,70 +993,121 @@ app.get('/api/todos', auth, async (req, res) => {
               suggester:profiles!todos_suggested_by_fkey(id, full_name),
               group:groups(id, name)
             `)
-            .eq('todo_type', 'group')
-            .in('group_id', groupIds)
+            .eq('todo_type', 'assigned')
+            .in('assigned_to', memberIds)
+            .eq('pending_completion', true)
             .eq('completed', false)
             .order('created_at', { ascending: false });
 
-          if (groupError) return res.status(500).json({ error: groupError.message });
-
-          // Get members of these groups
-          const { data: groupMembers } = await supabaseAdmin
-            .from('group_members')
-            .select('user_id')
-            .in('group_id', groupIds);
-          
-          const memberIds = groupMembers?.map(m => m.user_id) || [];
-          
-          // Get leaders of these groups
-          const { data: groupsData } = await supabaseAdmin
-            .from('groups')
-            .select('leader_id')
-            .in('id', groupIds);
-          
-          const leaderIds = groupsData?.map(g => g.leader_id).filter(Boolean) || [];
-          
-          // Get assigned tasks where:
-          // - assigned_to is a group member, OR
-          // - assigned_by is a group leader
-          let assignedTodos = [];
-          
-          if (memberIds.length > 0) {
-            // Build query for assigned tasks
-            let assignedQuery = supabaseAdmin
-              .from('todos')
-              .select(`
-                *,
-                creator:profiles!todos_user_id_fkey(id, full_name),
-                assignee:profiles!todos_assigned_to_fkey(id, full_name),
-                assigner:profiles!todos_assigned_by_fkey(id, full_name),
-                suggester:profiles!todos_suggested_by_fkey(id, full_name),
-                group:groups(id, name)
-              `)
-              .eq('todo_type', 'assigned')
-              .eq('completed', false)
-              .in('assigned_to', memberIds)
-              .order('created_at', { ascending: false });
-            
-            const { data: assigned, error: assignedError } = await assignedQuery;
-            
-            if (!assignedError && assigned) {
-              assignedTodos = assigned;
-            }
+          if (!assignedError && assigned) {
+            assignedPending = assigned;
           }
 
-          // Combine and sort
-          const allTodos = [...(groupTodos || []), ...assignedTodos]
-            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-          
-          return res.json(allTodos);
-        } else {
+          // Also get ALL assigned tasks (for member stats calculation)
+          const { data: allAssigned } = await supabaseAdmin
+            .from('todos')
+            .select(`
+              *,
+              creator:profiles!todos_user_id_fkey(id, full_name),
+              assignee:profiles!todos_assigned_to_fkey(id, full_name),
+              assigner:profiles!todos_assigned_by_fkey(id, full_name),
+              suggester:profiles!todos_suggested_by_fkey(id, full_name),
+              group:groups(id, name)
+            `)
+            .eq('todo_type', 'assigned')
+            .in('assigned_to', memberIds)
+            .eq('assigned_by', req.user.id)
+            .order('created_at', { ascending: false });
+
+          if (allAssigned) {
+            allAssignedTasks = allAssigned;
+          }
+        }
+
+        // Combine: pending suggestions + pending completions + all assigned tasks (for stats)
+        // Note: allAssignedTasks may have duplicates with assignedPending, frontend will dedupe
+        const allTodos = [...(pendingSuggestions || []), ...(pendingCompletion || []), ...assignedPending, ...allAssignedTasks]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        // Remove duplicates by id
+        const uniqueTodos = [...new Map(allTodos.map(item => [item.id, item])).values()];
+
+        return res.json(uniqueTodos);
+      } else if (type === 'team') {
+        // TEAM TAB (All members): Show confirmed ongoing + completed tasks
+        const groupIds = [...(membership ? [membership.group_id] : []), ...leaderGroupIds];
+
+        if (groupIds.length === 0) {
           return res.json([]);
         }
+
+        // Get confirmed group todos (ongoing and completed)
+        const { data: confirmedTodos, error: confirmedError } = await supabaseAdmin
+          .from('todos')
+          .select(`
+            *,
+            creator:profiles!todos_user_id_fkey(id, full_name),
+            assignee:profiles!todos_assigned_to_fkey(id, full_name),
+            assigner:profiles!todos_assigned_by_fkey(id, full_name),
+            suggester:profiles!todos_suggested_by_fkey(id, full_name),
+            group:groups(id, name)
+          `)
+          .eq('todo_type', 'group')
+          .in('group_id', groupIds)
+          .eq('is_confirmed', true)
+          .order('created_at', { ascending: false });
+
+        if (confirmedError) return res.status(500).json({ error: confirmedError.message });
+
+        // Get assigned tasks for group members
+        const { data: groupMembers } = await supabaseAdmin
+          .from('group_members')
+          .select('user_id')
+          .in('group_id', groupIds);
+
+        // Fetch leaders for these groups to include them
+        const { data: groupsData } = await supabaseAdmin
+          .from('groups')
+          .select('leader_id')
+          .in('id', groupIds);
+
+        const groupLeaderIds = groupsData?.map(g => g.leader_id) || [];
+
+        const memberIds = [
+          ...(groupMembers?.map(m => m.user_id) || []),
+          ...groupLeaderIds
+        ];
+
+        let assignedTodos = [];
+        if (memberIds.length > 0) {
+          const { data: assigned, error: assignedError } = await supabaseAdmin
+            .from('todos')
+            .select(`
+              *,
+              creator:profiles!todos_user_id_fkey(id, full_name),
+              assignee:profiles!todos_assigned_to_fkey(id, full_name),
+              assigner:profiles!todos_assigned_by_fkey(id, full_name),
+              suggester:profiles!todos_suggested_by_fkey(id, full_name),
+              group:groups(id, name)
+            `)
+            .eq('todo_type', 'assigned')
+            .in('assigned_to', memberIds)
+            .order('created_at', { ascending: false });
+
+          if (!assignedError && assigned) {
+            assignedTodos = assigned;
+          }
+        }
+
+        // Combine and sort
+        const allTodos = [...(confirmedTodos || []), ...assignedTodos]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        return res.json(allTodos);
       } else if (type === 'assigned') {
         // Show assigned todos + confirmed group todos for user's groups
         const groupIds = [...(membership ? [membership.group_id] : []), ...leaderGroupIds];
-        
+
         // We need to fetch both assigned todos and confirmed group todos
         // First get assigned todos
         const { data: assignedTodos, error: assignedError } = await supabaseAdmin
@@ -1044,7 +1151,7 @@ app.get('/api/todos', auth, async (req, res) => {
         // Combine and sort by created_at
         const allTodos = [...(assignedTodos || []), ...confirmedGroupTodos]
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        
+
         return res.json(allTodos);
       } else if (type === 'global') {
         // Global tab shows: global todos + confirmed group todos (not completed) + assigned tasks (not completed)
@@ -1079,7 +1186,7 @@ app.get('/api/todos', auth, async (req, res) => {
 // Create todo
 app.post('/api/todos', auth, async (req, res) => {
   try {
-    const { task, todo_type = 'personal', group_id, assigned_to } = req.body;
+    const { task, todo_type = 'personal', group_id, assigned_to, start_date, deadline } = req.body;
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('role, is_leader')
@@ -1132,7 +1239,7 @@ app.post('/api/todos', auth, async (req, res) => {
       // Only leaders or coordinators can assign tasks
       const isCoordinator = profile?.role === 'coordinator';
       const isLeaderProfile = profile?.is_leader === true;
-      
+
       if (!isCoordinator && !isLeaderProfile) {
         return res.status(403).json({ error: 'Only leaders or coordinators can assign tasks' });
       }
@@ -1142,7 +1249,7 @@ app.post('/api/todos', auth, async (req, res) => {
 
       // Leaders can always assign to themselves, otherwise check group membership
       const isSelfAssign = String(assigned_to) === String(req.user.id);
-      
+
       if (isLeaderProfile && !isCoordinator && !isSelfAssign) {
         // Only check group membership if assigning to someone else
         const { data: leaderGroups } = await supabaseAdmin
@@ -1167,6 +1274,10 @@ app.post('/api/todos', auth, async (req, res) => {
       todoData.assigned_by = req.user.id;
       todoData.is_confirmed = true;
       todoData.date_assigned = new Date().toISOString();
+
+      // Add start_date and deadline if provided
+      if (start_date) todoData.start_date = start_date;
+      if (deadline) todoData.deadline = deadline;
     }
 
     const { data, error } = await supabaseAdmin
@@ -1232,9 +1343,9 @@ app.put('/api/todos/:id', auth, async (req, res) => {
         .eq('group_id', todo.group_id)
         .eq('user_id', req.user.id)
         .single();
-      
+
       const isGroupMember = !!membership;
-      
+
       if (isGroupLeader || isCoordinator) {
         // Leaders can directly complete/edit group todos
         canUpdate = true;
@@ -1253,7 +1364,7 @@ app.put('/api/todos/:id', auth, async (req, res) => {
     } else if (todo.todo_type === 'assigned') {
       // Self-assigned tasks (leader assigned to themselves) can be completed directly
       const isSelfAssigned = todo.assigned_to === todo.assigned_by;
-      
+
       if (isSelfAssigned && isAssignee) {
         // Leader completing their own self-assigned task - no approval needed
         canUpdate = true;
@@ -1294,9 +1405,11 @@ app.put('/api/todos/:id', auth, async (req, res) => {
   }
 });
 
-// Confirm group todo (leaders only)
+// Confirm group todo (leaders only) - with assignment details
 app.post('/api/todos/:id/confirm', auth, async (req, res) => {
   try {
+    const { start_date, deadline, assigned_to, task } = req.body;
+
     const { data: todo } = await supabaseAdmin
       .from('todos')
       .select('*, group:groups(leader_id)')
@@ -1311,9 +1424,29 @@ app.post('/api/todos/:id/confirm', auth, async (req, res) => {
       return res.status(403).json({ error: 'Only the group leader can confirm todos' });
     }
 
+    // Build update data
+    const updateData = {
+      is_confirmed: true,
+      date_assigned: new Date().toISOString()
+    };
+
+    // Optional fields that leader can set/modify
+    if (start_date) updateData.start_date = start_date;
+    if (deadline) updateData.deadline = deadline;
+    if (task) updateData.task = task;
+
+    // If assigning to someone, change todo_type to 'assigned' and set assigned_to/assigned_by
+    if (assigned_to) {
+      updateData.todo_type = 'assigned';
+      updateData.assigned_to = assigned_to;
+      updateData.assigned_by = req.user.id;
+      // Clear group_id since it's now an assigned task (to avoid constraint violation)
+      updateData.group_id = null;
+    }
+
     const { error } = await supabaseAdmin
       .from('todos')
-      .update({ is_confirmed: true })
+      .update(updateData)
       .eq('id', req.params.id);
 
     if (error) return res.status(500).json({ error: error.message });
@@ -1352,7 +1485,7 @@ app.post('/api/todos/:id/confirm-completion', auth, async (req, res) => {
 
     // For assigned todos: assigner or coordinator can confirm
     // For group todos: group leader or coordinator can confirm
-    const canConfirm = isCoordinator || 
+    const canConfirm = isCoordinator ||
       (todo.todo_type === 'assigned' && isAssigner) ||
       (todo.todo_type === 'group' && isGroupLeader);
 
@@ -1401,7 +1534,7 @@ app.post('/api/todos/:id/reject-completion', auth, async (req, res) => {
 
     // For assigned todos: assigner or coordinator can reject
     // For group todos: group leader or coordinator can reject
-    const canReject = isCoordinator || 
+    const canReject = isCoordinator ||
       (todo.todo_type === 'assigned' && isAssigner) ||
       (todo.todo_type === 'group' && isGroupLeader);
 
@@ -1496,13 +1629,13 @@ app.post('/api/overtime', auth, async (req, res) => {
 
     const safePeriods = Array.isArray(periods)
       ? periods
-          .filter(p => p)
-          .map(p => ({
-            start_date: p.start_date || null,
-            end_date: p.end_date || null,
-            start_time: p.start_time || null,
-            end_time: p.end_time || null
-          }))
+        .filter(p => p)
+        .map(p => ({
+          start_date: p.start_date || null,
+          end_date: p.end_date || null,
+          start_time: p.start_time || null,
+          end_time: p.end_time || null
+        }))
       : [];
 
     const { data, error } = await supabaseAdmin
@@ -1544,12 +1677,12 @@ app.post('/api/overtime', auth, async (req, res) => {
         message: `${employee_name} submitted an overtime request.`,
         link: 'overtime-requests'
       }));
-      
+
       console.log('Creating notifications for coordinators:', notifications);
       const { data: notifData, error: notifError } = await supabaseAdmin
         .from('notifications')
         .insert(notifications);
-      
+
       if (notifError) {
         console.error('Notification insert error:', notifError);
       } else {
@@ -1668,7 +1801,7 @@ app.put('/api/overtime/:id/approve', auth, async (req, res) => {
           message: 'Your overtime request has been approved by the coordinator.',
           link: 'overtime-status'
         });
-      
+
       if (notifError) {
         console.error('Notification insert error:', notifError);
       } else {
@@ -1692,7 +1825,7 @@ app.get('/api/notifications', auth, async (req, res) => {
       .select('*')
       .eq('user_id', req.user.id)
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('Notifications fetch error:', error);
       return res.status(500).json({ error: error.message });
@@ -1712,7 +1845,7 @@ app.put('/api/notifications/:id/read', auth, async (req, res) => {
       .update({ is_read: true })
       .eq('id', req.params.id)
       .eq('user_id', req.user.id);
-    
+
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   } catch (err) {
@@ -1729,7 +1862,7 @@ app.post('/api/admin/checkin/:userId', auth, async (req, res) => {
       .select('role')
       .eq('id', req.user.id)
       .single();
-    
+
     if (profile?.role !== 'coordinator') {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -1739,16 +1872,16 @@ app.post('/api/admin/checkin/:userId', auth, async (req, res) => {
 
     const { data, error } = await supabaseAdmin
       .from('attendance')
-      .insert({ 
-        user_id: req.params.userId, 
-        date: targetDate, 
-        time_in, 
+      .insert({
+        user_id: req.params.userId,
+        date: targetDate,
+        time_in,
         status: 'On-Time',
         late_deduction_hours: 0
       })
       .select()
       .single();
-    
+
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
   } catch (err) {
@@ -1764,7 +1897,7 @@ app.put('/api/admin/checkout/:attendanceId', auth, async (req, res) => {
       .select('role')
       .eq('id', req.user.id)
       .single();
-    
+
     if (profile?.role !== 'coordinator') {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -1775,7 +1908,7 @@ app.put('/api/admin/checkout/:attendanceId', auth, async (req, res) => {
       .from('attendance')
       .update({ time_out })
       .eq('id', req.params.attendanceId);
-    
+
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   } catch (err) {
