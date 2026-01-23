@@ -60,17 +60,22 @@ function Profile({ token, user, onLogout }) {
           const outMinutes = parseMinutes(a.time_out);
           
           if (inMinutes !== null && outMinutes !== null) {
-            const morningBaseline = 8 * 60;
-            const afternoonBaseline = 13 * 60;
-            const morningEnd = 12 * 60;
-            const afternoonEnd = 17 * 60;
+            const morningBaseline = 8 * 60; // 8:00 AM
+            const afternoonBaseline = 13 * 60; // 1:00 PM
+            const morningEnd = 12 * 60; // 12:00 PM
+            const afternoonEnd = 17 * 60; // 5:00 PM
             
+            // Determine session based on check-in time
             if (inMinutes < 12 * 60) {
-              // Morning session
-              totalMinutes += Math.max(0, Math.min(outMinutes, morningEnd) - morningBaseline);
+              // Morning session: count from 8 AM baseline to time out (max 12 PM)
+              const effectiveStart = Math.max(inMinutes, morningBaseline);
+              const effectiveEnd = Math.min(outMinutes, morningEnd);
+              totalMinutes += Math.max(0, effectiveEnd - effectiveStart);
             } else {
-              // Afternoon session
-              totalMinutes += Math.max(0, Math.min(outMinutes, afternoonEnd) - afternoonBaseline);
+              // Afternoon session: count from 1 PM baseline to time out (max 5 PM)
+              const effectiveStart = Math.max(inMinutes, afternoonBaseline);
+              const effectiveEnd = Math.min(outMinutes, afternoonEnd);
+              totalMinutes += Math.max(0, effectiveEnd - effectiveStart);
             }
           }
         }
@@ -80,9 +85,11 @@ function Profile({ token, user, onLogout }) {
           const otInMinutes = parseMinutes(a.ot_time_in);
           const otOutMinutes = parseMinutes(a.ot_time_out);
           if (otInMinutes !== null && otOutMinutes !== null) {
-            const overtimeBaseline = 19 * 60;
-            const overtimeEnd = 22 * 60;
-            totalMinutes += Math.max(0, Math.min(otOutMinutes, overtimeEnd) - overtimeBaseline);
+            const overtimeBaseline = 19 * 60; // 7:00 PM
+            const overtimeEnd = 22 * 60; // 10:00 PM
+            const effectiveStart = Math.max(otInMinutes, overtimeBaseline);
+            const effectiveEnd = Math.min(otOutMinutes, overtimeEnd);
+            totalMinutes += Math.max(0, effectiveEnd - effectiveStart);
           }
         }
       });

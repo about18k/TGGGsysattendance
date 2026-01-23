@@ -82,19 +82,31 @@ function Reports({ token }) {
     const outMinutes = parseMinutes(timeOut);
     if (inMinutes === null || outMinutes === null) return 0;
     
-    const morningBaseline = 8 * 60;
-    const afternoonBaseline = 13 * 60;
-    const overtimeBaseline = 19 * 60;
-    const morningEnd = 12 * 60;
-    const afternoonEnd = 17 * 60;
-    const overtimeEnd = 22 * 60;
+    // If check-in and check-out are the same, no hours worked
+    if (inMinutes === outMinutes) return 0;
+    
+    const morningBaseline = 8 * 60; // 8:00 AM
+    const afternoonBaseline = 13 * 60; // 1:00 PM
+    const overtimeBaseline = 19 * 60; // 7:00 PM
+    const morningEnd = 12 * 60; // 12:00 PM
+    const afternoonEnd = 17 * 60; // 5:00 PM
+    const overtimeEnd = 22 * 60; // 10:00 PM
     
     if (session === 'Morning') {
-      return Math.max(0, Math.min(outMinutes, morningEnd) - morningBaseline);
+      // Count from 8 AM baseline (or actual check-in if later) to time out (max 12 PM)
+      const effectiveStart = Math.max(inMinutes, morningBaseline);
+      const effectiveEnd = Math.min(outMinutes, morningEnd);
+      return Math.max(0, effectiveEnd - effectiveStart);
     } else if (session === 'Afternoon') {
-      return Math.max(0, Math.min(outMinutes, afternoonEnd) - afternoonBaseline);
+      // Count from 1 PM baseline (or actual check-in if later) to time out (max 5 PM)
+      const effectiveStart = Math.max(inMinutes, afternoonBaseline);
+      const effectiveEnd = Math.min(outMinutes, afternoonEnd);
+      return Math.max(0, effectiveEnd - effectiveStart);
     } else if (session === 'Overtime') {
-      return Math.max(0, Math.min(outMinutes, overtimeEnd) - overtimeBaseline);
+      // Count from 7 PM baseline (or actual check-in if later) to time out (max 10 PM)
+      const effectiveStart = Math.max(inMinutes, overtimeBaseline);
+      const effectiveEnd = Math.min(outMinutes, overtimeEnd);
+      return Math.max(0, effectiveEnd - effectiveStart);
     }
     return 0;
   };
@@ -180,6 +192,33 @@ function Reports({ token }) {
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
     return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  const capTimeOut = (timeOut, session) => {
+    if (!timeOut || timeOut === '-') return timeOut;
+    
+    const outMinutes = parseMinutes(timeOut);
+    if (outMinutes === null) return timeOut;
+    
+    const morningEnd = 12 * 60; // 12:00 PM
+    const afternoonEnd = 17 * 60; // 5:00 PM
+    const overtimeEnd = 22 * 60; // 10:00 PM
+    
+    let cappedMinutes = outMinutes;
+    
+    if (session === 'Morning' && outMinutes > morningEnd) {
+      cappedMinutes = morningEnd;
+    } else if (session === 'Afternoon' && outMinutes > afternoonEnd) {
+      cappedMinutes = afternoonEnd;
+    } else if (session === 'Overtime' && outMinutes > overtimeEnd) {
+      cappedMinutes = overtimeEnd;
+    }
+    
+    const hours = Math.floor(cappedMinutes / 60);
+    const mins = cappedMinutes % 60;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    return `${displayHour}:${mins.toString().padStart(2, '0')} ${ampm}`;
   };
 
   const calculateRecordMetrics = (record) => {
@@ -519,7 +558,7 @@ function Reports({ token }) {
                       </div>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Morning Out</p>
-                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.morning_time_out) || '-'}</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{capTimeOut(record.morning_time_out, 'Morning') || '-'}</p>
                       </div>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Afternoon In</p>
@@ -527,7 +566,7 @@ function Reports({ token }) {
                       </div>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Afternoon Out</p>
-                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.afternoon_time_out) || '-'}</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{capTimeOut(record.afternoon_time_out, 'Afternoon') || '-'}</p>
                       </div>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>OT In</p>
@@ -535,7 +574,7 @@ function Reports({ token }) {
                       </div>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>OT Out</p>
-                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.ot_time_out) || '-'}</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{capTimeOut(record.ot_time_out, 'Overtime') || '-'}</p>
                       </div>
                     </div>
 

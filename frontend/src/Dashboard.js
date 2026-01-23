@@ -127,33 +127,35 @@ function Dashboard({ token, user, onLogout }) {
       lateMinutes = entry.late_minutes || 0;
     }
 
-    // Calculate hours worked from BASELINE, capped at 4 hours per session
-    // ALWAYS recalculate to ensure correct hours from baseline
+    // Calculate hours worked: count from baseline, but use actual check-in if later than baseline
     if (timeOutMinutes !== null && timeInMinutes !== null) {
-      const morningStandardEnd = 12 * 60; // 12:00 PM
-      const afternoonStandardEnd = 17 * 60; // 5:00 PM
-      const overtimeStandardEnd = 22 * 60; // 10:00 PM
+      // If check-in and check-out are the same, no hours worked
+      if (timeInMinutes === timeOutMinutes) {
+        hoursWorked = 0;
+      } else {
+        const morningBaseline = 8 * 60; // 8:00 AM
+        const afternoonBaseline = 13 * 60; // 1:00 PM  
+        const overtimeBaseline = 19 * 60; // 7:00 PM
+        const morningEnd = 12 * 60; // 12:00 PM
+        const afternoonEnd = 17 * 60; // 5:00 PM
+        const overtimeEnd = 22 * 60; // 10:00 PM
 
-      if (entry.session === 'Morning') {
-        // Morning: Count from 8:00 AM baseline to time_out (capped at 12:00 PM), max 4 hours
-        // Use baseline (8 AM) as start, not actual check-in time
-        const effectiveStart = morningBaseline; // Always 8:00 AM
-        const effectiveOut = Math.min(timeOutMinutes, morningStandardEnd);
-        hoursWorked = effectiveOut - effectiveStart;
-        hoursWorked = Math.max(0, Math.min(hoursWorked, 240)); // Cap at 4 hours
-      } else if (entry.session === 'Afternoon') {
-        // Afternoon: Count from 1:00 PM baseline to time_out (capped at 5:00 PM), max 4 hours
-        // Use baseline (1 PM) as start, not actual check-in time
-        const effectiveStart = afternoonBaseline; // Always 1:00 PM
-        const effectiveOut = Math.min(timeOutMinutes, afternoonStandardEnd);
-        hoursWorked = effectiveOut - effectiveStart;
-        hoursWorked = Math.max(0, Math.min(hoursWorked, 240)); // Cap at 4 hours
-      } else if (entry.session === 'Overtime') {
-        // Overtime: 7:00 PM baseline to time_out (capped at 10:00 PM), max 3 hours
-        let otOut = Math.min(timeOutMinutes, overtimeStandardEnd);
-        hoursWorked = otOut - overtimeBaseline;
-        if (hoursWorked < 0) hoursWorked += 24 * 60; // Handle overnight
-        hoursWorked = Math.min(hoursWorked, 180); // Cap at 3 hours
+        if (entry.session === 'Morning') {
+          // Count from 8 AM baseline (or actual check-in if later) to time out (max 12 PM)
+          const effectiveStart = Math.max(timeInMinutes, morningBaseline);
+          const effectiveEnd = Math.min(timeOutMinutes, morningEnd);
+          hoursWorked = Math.max(0, effectiveEnd - effectiveStart);
+        } else if (entry.session === 'Afternoon') {
+          // Count from 1 PM baseline (or actual check-in if later) to time out (max 5 PM)
+          const effectiveStart = Math.max(timeInMinutes, afternoonBaseline);
+          const effectiveEnd = Math.min(timeOutMinutes, afternoonEnd);
+          hoursWorked = Math.max(0, effectiveEnd - effectiveStart);
+        } else if (entry.session === 'Overtime') {
+          // Count from 7 PM baseline (or actual check-in if later) to time out (max 10 PM)
+          const effectiveStart = Math.max(timeInMinutes, overtimeBaseline);
+          const effectiveEnd = Math.min(timeOutMinutes, overtimeEnd);
+          hoursWorked = Math.max(0, effectiveEnd - effectiveStart);
+        }
       }
     } else {
       hoursWorked = entry.total_minutes_worked || 0;
@@ -223,6 +225,33 @@ function Dashboard({ token, user, onLogout }) {
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
     return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  const capTimeOut = (timeOut, session) => {
+    if (!timeOut || timeOut === '-') return timeOut;
+    
+    const outMinutes = parseMinutes(timeOut);
+    if (outMinutes === null) return timeOut;
+    
+    const morningEnd = 12 * 60; // 12:00 PM
+    const afternoonEnd = 17 * 60; // 5:00 PM
+    const overtimeEnd = 22 * 60; // 10:00 PM
+    
+    let cappedMinutes = outMinutes;
+    
+    if (session === 'Morning' && outMinutes > morningEnd) {
+      cappedMinutes = morningEnd;
+    } else if (session === 'Afternoon' && outMinutes > afternoonEnd) {
+      cappedMinutes = afternoonEnd;
+    } else if (session === 'Overtime' && outMinutes > overtimeEnd) {
+      cappedMinutes = overtimeEnd;
+    }
+    
+    const hours = Math.floor(cappedMinutes / 60);
+    const mins = cappedMinutes % 60;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    return `${displayHour}:${mins.toString().padStart(2, '0')} ${ampm}`;
   };
 
   useEffect(() => {
@@ -1263,11 +1292,11 @@ function Dashboard({ token, user, onLogout }) {
                           {user.role === 'coordinator' && <td>{a.full_name}</td>}
                           <td>{a.date}</td>
                           <td>{formatTime(a.morning_time_in) || '-'}</td>
-                          <td>{formatTime(a.morning_time_out) || '-'}</td>
+                          <td>{capTimeOut(a.morning_time_out, 'Morning') || '-'}</td>
                           <td>{formatTime(a.afternoon_time_in) || '-'}</td>
-                          <td>{formatTime(a.afternoon_time_out) || '-'}</td>
+                          <td>{capTimeOut(a.afternoon_time_out, 'Afternoon') || '-'}</td>
                           <td>{formatTime(a.ot_time_in) || '-'}</td>
-                          <td>{formatTime(a.ot_time_out) || '-'}</td>
+                          <td>{capTimeOut(a.ot_time_out, 'Overtime') || '-'}</td>
                           <td>
                             {a.total_hours_worked > 0 ? (
                               <span style={{ color: '#28a745', fontWeight: '600' }}>
