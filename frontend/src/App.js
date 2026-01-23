@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Clock, ListTodo, Bell } from 'lucide-react';
+import { LayoutDashboard, Clock, ListTodo, Bell, UserCheck } from 'lucide-react';
 import Login from './Login';
 import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
@@ -12,6 +12,7 @@ import OvertimeForm from './OvertimeForm';
 import OvertimeStatus from './OvertimeStatus';
 import OvertimeRequests from './OvertimeRequests';
 import NotificationPanel from './components/NotificationPanel';
+import VerificationQueue from './VerificationQueue';
 import './App.css';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -173,6 +174,8 @@ function App() {
         return <Reports token={token} />;
       case 'overtime-requests':
         return <OvertimeRequests token={token} />;
+      case 'verifications':
+        return <VerificationQueue token={token} />;
       case 'overtime-status':
         return <OvertimeStatus token={token} />;
       case 'overtime':
@@ -274,6 +277,28 @@ function App() {
             >
               <Clock size={16} />
               OT Requests
+            </button>
+          )}
+          {user.role === 'coordinator' && (
+            <button 
+              onClick={() => changePage('verifications')}
+              style={{
+                background: currentPage === 'verifications' ? '#FF7120' : 'transparent',
+                color: currentPage === 'verifications' ? 'white' : '#FF7120',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                padding: '0.4rem 0.75rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <UserCheck size={16} />
+              Verifications
             </button>
           )}
           {user.role === 'intern' && (
