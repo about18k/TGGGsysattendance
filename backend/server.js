@@ -87,9 +87,16 @@ app.post('/api/login', async (req, res) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, role')
+    .select('full_name, role, verification_status, is_employee_or_trainee')
     .eq('id', data.user.id)
     .single();
+
+  if (profile?.is_employee_or_trainee && profile?.verification_status !== 'approved') {
+    const message = profile.verification_status === 'declined'
+      ? 'Your signup was declined. Please contact your coordinator for help.'
+      : 'Your account is pending coordinator verification.';
+    return res.status(403).json({ error: message });
+  }
 
   res.json({
     token: data.session.access_token,
@@ -99,7 +106,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/signup', async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, isEmployeeOrTrainee } = req.body;
 
   // Use admin client to create user with auto-confirmation
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -111,19 +118,135 @@ app.post('/api/signup', async (req, res) => {
   if (error) return res.status(400).json({ error: error.message });
 
   if (data.user) {
+    const verificationStatus = isEmployeeOrTrainee ? 'pending' : 'approved';
+
     // Create profile for the new user
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert({
         id: data.user.id,
         full_name: name,
-        role: 'intern'
+        role: 'intern',
+        verification_status: verificationStatus,
+        is_employee_or_trainee: !!isEmployeeOrTrainee
       });
 
     if (profileError) return res.status(500).json({ error: profileError.message });
+
+    if (isEmployeeOrTrainee) {
+      const { error: pendingError } = await supabaseAdmin
+        .from('pending_verifications')
+        .upsert({
+          user_id: data.user.id,
+          full_name: name,
+          email,
+          reason_for_request: 'Employee or trainee verification'
+        });
+
+      if (pendingError) return res.status(500).json({ error: pendingError.message });
+    }
   }
 
-  res.json({ message: 'Account created successfully' });
+  res.json({ message: isEmployeeOrTrainee ? 'Signup submitted for coordinator verification.' : 'Account created successfully' });
+});
+
+// Verification queue for coordinators
+app.get('/api/verifications/pending', auth, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('pending_verifications')
+      .select('id, user_id, full_name, email, reason_for_request, created_at, action')
+      .is('action', null)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Pending verifications fetch error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json(data || []);
+  } catch (err) {
+    console.error('Pending verifications exception:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/verifications/:id/decision', auth, async (req, res) => {
+  try {
+    const { action, department } = req.body;
+    if (!['approved', 'declined'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    if (action === 'approved' && !department?.trim()) {
+      return res.status(400).json({ error: 'Department is required for approval' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (profile?.role !== 'coordinator') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { data: pending, error: fetchError } = await supabaseAdmin
+      .from('pending_verifications')
+      .select('user_id, email, full_name')
+      .eq('id', req.params.id)
+      .is('action', null)
+      .single();
+
+    if (fetchError || !pending) {
+      return res.status(404).json({ error: 'Request not found or already processed' });
+    }
+
+    const profileUpdateData = { verification_status: action };
+    if (action === 'approved') {
+      profileUpdateData.department = department.trim();
+    }
+
+    const { error: profileUpdateError } = await supabaseAdmin
+      .from('profiles')
+      .update(profileUpdateData)
+      .eq('id', pending.user_id);
+
+    if (profileUpdateError) {
+      console.error('Verification profile update error:', profileUpdateError);
+      return res.status(500).json({ error: profileUpdateError.message });
+    }
+
+    const { error: pendingUpdateError } = await supabaseAdmin
+      .from('pending_verifications')
+      .update({
+        action,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: req.user.id
+      })
+      .eq('id', req.params.id);
+
+    if (pendingUpdateError) {
+      console.error('Pending verification update error:', pendingUpdateError);
+      return res.status(500).json({ error: pendingUpdateError.message });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Verification decision exception:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/auth/google', async (req, res) => {
