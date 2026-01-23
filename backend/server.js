@@ -93,8 +93,8 @@ app.post('/api/login', async (req, res) => {
 
   if (profile?.is_employee_or_trainee && profile?.verification_status !== 'approved') {
     const message = profile.verification_status === 'declined'
-      ? 'Your signup was declined. Please contact your coordinator for help.'
-      : 'Your account is pending coordinator verification.';
+      ? 'Your signup was declined. Please contact the coordinator for help.'
+      : 'Your account is pending for verification, cannot login.';
     return res.status(403).json({ error: message });
   }
 
@@ -106,7 +106,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/signup', async (req, res) => {
-  const { name, email, password, isEmployeeOrTrainee } = req.body;
+  const { name, email, password } = req.body;
 
   // Use admin client to create user with auto-confirmation
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -118,36 +118,33 @@ app.post('/api/signup', async (req, res) => {
   if (error) return res.status(400).json({ error: error.message });
 
   if (data.user) {
-    const verificationStatus = isEmployeeOrTrainee ? 'pending' : 'approved';
-
-    // Create profile for the new user
+    // All new accounts require verification
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert({
         id: data.user.id,
         full_name: name,
         role: 'intern',
-        verification_status: verificationStatus,
-        is_employee_or_trainee: !!isEmployeeOrTrainee
+        verification_status: 'pending',
+        is_employee_or_trainee: true
       });
 
     if (profileError) return res.status(500).json({ error: profileError.message });
 
-    if (isEmployeeOrTrainee) {
-      const { error: pendingError } = await supabaseAdmin
-        .from('pending_verifications')
-        .upsert({
-          user_id: data.user.id,
-          full_name: name,
-          email,
-          reason_for_request: 'Employee or trainee verification'
-        });
+    // Add to pending verifications
+    const { error: pendingError } = await supabaseAdmin
+      .from('pending_verifications')
+      .upsert({
+        user_id: data.user.id,
+        full_name: name,
+        email,
+        reason_for_request: 'New account verification'
+      });
 
-      if (pendingError) return res.status(500).json({ error: pendingError.message });
-    }
+    if (pendingError) return res.status(500).json({ error: pendingError.message });
   }
 
-  res.json({ message: isEmployeeOrTrainee ? 'Signup submitted for coordinator verification.' : 'Account created successfully' });
+  res.json({ message: 'Signup submitted for coordinator verification.' });
 });
 
 // Verification queue for coordinators
@@ -240,6 +237,61 @@ app.post('/api/verifications/:id/decision', auth, async (req, res) => {
     if (pendingUpdateError) {
       console.error('Pending verification update error:', pendingUpdateError);
       return res.status(500).json({ error: pendingUpdateError.message });
+    }
+
+    // Send email notification to user
+    try {
+      const emailSubject = action === 'approved' 
+        ? 'Account Approved - Triple G BuildHub'
+        : 'Account Verification Update - Triple G BuildHub';
+
+      const emailBody = action === 'approved'
+        ? `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #FF7120;">Account Approved!</h2>
+            <p>Hello ${pending.full_name},</p>
+            <p>Great news! Your account has been approved by a coordinator.</p>
+            <p>You can now log in to your account and start using the Triple G BuildHub attendance system.</p>
+            <p><strong>Next steps:</strong></p>
+            <ul>
+              <li>Log in with your email and password</li>
+              <li>Complete your profile information</li>
+              <li>Start tracking your attendance</li>
+            </ul>
+            <p style="margin-top: 20px;">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" 
+                 style="background-color: #FF7120; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">
+                Log In Now
+              </a>
+            </p>
+            <p style="color: #666; margin-top: 30px;">
+              If you have any questions, please contact your coordinator.
+            </p>
+          </div>
+        `
+        : `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #FF7120;">Account Verification Update</h2>
+            <p>Hello ${pending.full_name},</p>
+            <p>We regret to inform you that your account verification request has been declined.</p>
+            <p>If you believe this is an error or need more information, please contact your coordinator for assistance.</p>
+            <p style="color: #666; margin-top: 30px;">
+              Thank you for your understanding.
+            </p>
+          </div>
+        `;
+
+      await transporter.sendMail({
+        from: `"Triple G BuildHub" <${process.env.SMTP_USER}>`,
+        to: pending.email,
+        subject: emailSubject,
+        html: emailBody
+      });
+
+      console.log(`Verification email sent to ${pending.email}`);
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // Don't fail the request if email fails
     }
 
     res.json({ success: true });

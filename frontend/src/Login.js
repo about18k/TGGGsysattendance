@@ -17,8 +17,7 @@ function Login({ onLogin }) {
     email: '',
     password: '',
     acceptTerms: false,
-    rememberMe: false,
-    isEmployeeOrTrainee: false
+    rememberMe: false
   });
   const [error, setError] = useState('');
 
@@ -108,12 +107,6 @@ function Login({ onLogin }) {
   const handleSignup = async (e) => {
     e.preventDefault();
     
-    // Validate employee/trainee status
-    if (!formData.isEmployeeOrTrainee) {
-      setError('You must be an employee or OJT trainee of Triple G to create an account.');
-      return;
-    }
-    
     // Validate email
     const emailError = validateEmail(formData.email);
     if (emailError) {
@@ -139,14 +132,11 @@ function Login({ onLogin }) {
       await axios.post(`${API}/signup`, {
         name: `${formData.firstName} ${formData.lastName}`,
         email: formData.email,
-        password: formData.password,
-        isEmployeeOrTrainee: formData.isEmployeeOrTrainee
+        password: formData.password
       });
       setIsSignup(false);
-      setFormData({ firstName: '', lastName: '', email: '', password: '', acceptTerms: false, rememberMe: false, isEmployeeOrTrainee: false });
-      setError(formData.isEmployeeOrTrainee 
-        ? 'Signup submitted for coordinator verification. You can log in once approved.'
-        : 'Account created successfully! Please log in.');
+      setFormData({ firstName: '', lastName: '', email: '', password: '', acceptTerms: false, rememberMe: false });
+      setError('Account successfully created! Your account is pending for verification. You will receive an email notification once your account has been approved.');
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Signup failed. Please try again.');
     } finally {
@@ -210,7 +200,7 @@ function Login({ onLogin }) {
         </div>
 
         {/* Right Side - Form Section */}
-        <div className="flex-1 flex items-center justify-center bg-navy-dark p-4 md:p-8 overflow-y-auto scrollbar-none">
+        <div className="flex-1 flex flex-col items-center justify-start bg-navy-dark p-4 md:p-8 overflow-y-auto scrollbar-none" data-form-section>
           <div className="w-full max-w-[420px]">
             {/* Mobile Logo */}
             <div className="md:hidden text-center mb-6">
@@ -257,44 +247,6 @@ function Login({ onLogin }) {
                     required
                     className="flex-1 w-full px-4 py-3.5 bg-navy border-2 border-primary/20 rounded-xl text-white text-base transition-all focus:outline-none focus:border-primary focus:bg-navy-light focus:shadow-[0_0_0_3px_rgba(255,113,32,0.1)] focus:-translate-y-0.5 placeholder:text-gray-500"
                   />
-                </div>
-              )}
-
-              {isSignup && (
-                <div className="mb-4 md:mb-5 p-4 bg-navy border-2 border-primary/20 rounded-xl text-gray-200 text-sm md:text-base">
-                  <p className="mb-3 font-medium">Are you an employee or OJT trainee of Triple G?</p>
-                  <div className="flex gap-6">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="isEmployeeOrTrainee"
-                        checked={formData.isEmployeeOrTrainee === true}
-                        onChange={() => setFormData(prev => ({ ...prev, isEmployeeOrTrainee: true }))}
-                        className="w-[18px] h-[18px] accent-primary"
-                      />
-                      <span>Yes</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="isEmployeeOrTrainee"
-                        checked={formData.isEmployeeOrTrainee === false}
-                        onChange={() => setFormData(prev => ({ ...prev, isEmployeeOrTrainee: false }))}
-                        className="w-[18px] h-[18px] accent-primary"
-                      />
-                      <span>No</span>
-                    </label>
-                  </div>
-                  {formData.isEmployeeOrTrainee && (
-                    <p className="mt-3 text-xs md:text-sm text-primary/80">
-                      A coordinator must approve your signup before you can access the app.
-                    </p>
-                  )}
-                  {formData.isEmployeeOrTrainee === false && (
-                    <p className="mt-3 text-xs md:text-sm text-red-400">
-                      You must be an employee or OJT trainee of Triple G to create an account.
-                    </p>
-                  )}
                 </div>
               )}
 
