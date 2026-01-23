@@ -82,29 +82,31 @@ function Reports({ token }) {
     const outMinutes = parseMinutes(timeOut);
     if (inMinutes === null || outMinutes === null) return 0;
     
-    // If check-in and check-out are the same, no hours worked
     if (inMinutes === outMinutes) return 0;
     
     const morningBaseline = 8 * 60; // 8:00 AM
     const afternoonBaseline = 13 * 60; // 1:00 PM
     const overtimeBaseline = 19 * 60; // 7:00 PM
+    const morningGrace = 8 * 60 + 5; // 8:05 AM
+    const afternoonGrace = 13 * 60 + 5; // 1:05 PM
+    const overtimeGrace = 19 * 60 + 5; // 7:05 PM
     const morningEnd = 12 * 60; // 12:00 PM
     const afternoonEnd = 17 * 60; // 5:00 PM
     const overtimeEnd = 22 * 60; // 10:00 PM
     
     if (session === 'Morning') {
-      // Count from 8 AM baseline (or actual check-in if later) to time out (max 12 PM)
-      const effectiveStart = Math.max(inMinutes, morningBaseline);
+      // If within grace period (<=8:05 AM), count from baseline (8:00 AM)
+      const effectiveStart = inMinutes <= morningGrace ? morningBaseline : inMinutes;
       const effectiveEnd = Math.min(outMinutes, morningEnd);
       return Math.max(0, effectiveEnd - effectiveStart);
     } else if (session === 'Afternoon') {
-      // Count from 1 PM baseline (or actual check-in if later) to time out (max 5 PM)
-      const effectiveStart = Math.max(inMinutes, afternoonBaseline);
+      // If within grace period (<=1:05 PM), count from baseline (1:00 PM)
+      const effectiveStart = inMinutes <= afternoonGrace ? afternoonBaseline : inMinutes;
       const effectiveEnd = Math.min(outMinutes, afternoonEnd);
       return Math.max(0, effectiveEnd - effectiveStart);
     } else if (session === 'Overtime') {
-      // Count from 7 PM baseline (or actual check-in if later) to time out (max 10 PM)
-      const effectiveStart = Math.max(inMinutes, overtimeBaseline);
+      // If within grace period (<=7:05 PM), count from baseline (7:00 PM)
+      const effectiveStart = inMinutes <= overtimeGrace ? overtimeBaseline : inMinutes;
       const effectiveEnd = Math.min(outMinutes, overtimeEnd);
       return Math.max(0, effectiveEnd - effectiveStart);
     }
@@ -170,9 +172,21 @@ function Reports({ token }) {
 
   const determineSession = (timeIn) => {
     if (!timeIn) return null;
-    const [time] = timeIn.split(' ');
-    const [h] = time.split(':');
-    const hour = parseInt(h, 10);
+    
+    // Handle both 24-hour format (07:40:00) and 12-hour format (7:40 AM)
+    let hour;
+    if (timeIn.includes('AM') || timeIn.includes('PM')) {
+      const [time] = timeIn.split(' ');
+      const [h] = time.split(':');
+      hour = parseInt(h, 10);
+      if (timeIn.includes('PM') && hour !== 12) hour += 12;
+      if (timeIn.includes('AM') && hour === 12) hour = 0;
+    } else {
+      // 24-hour format
+      const [h] = timeIn.split(':');
+      hour = parseInt(h, 10);
+    }
+    
     if (hour < 12) return 'Morning';
     if (hour >= 12 && hour < 18) return 'Afternoon';
     return 'Overtime';

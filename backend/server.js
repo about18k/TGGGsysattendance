@@ -393,19 +393,20 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
     let status = 'On-Time';
 
     // Calculate late minutes (total late time for this session)
+    // Only deduct if late time exceeds 5 minutes grace period
     if (isMorning) {
       if (minutesSinceMidnight > morningGrace) {
-        lateMinutes = minutesSinceMidnight - morningBaseline;
+        lateMinutes = minutesSinceMidnight - morningGrace;
         status = 'Late';
       }
     } else if (isAfternoon) {
       if (minutesSinceMidnight > afternoonGrace) {
-        lateMinutes = minutesSinceMidnight - afternoonBaseline;
+        lateMinutes = minutesSinceMidnight - afternoonGrace;
         status = 'Late';
       }
     } else if (isOvertime) {
       if (minutesSinceMidnight > overtimeGrace) {
-        lateMinutes = minutesSinceMidnight - overtimeBaseline;
+        lateMinutes = minutesSinceMidnight - overtimeGrace;
         status = 'Late';
       }
     }

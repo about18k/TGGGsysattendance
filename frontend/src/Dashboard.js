@@ -112,47 +112,46 @@ function Dashboard({ token, user, onLogout }) {
     const morningBaseline = 8 * 60; // 8:00 AM
     const afternoonBaseline = 13 * 60; // 1:00 PM
     const overtimeBaseline = 19 * 60; // 7:00 PM
+    const morningGrace = 8 * 60 + 5; // 8:05 AM
+    const afternoonGrace = 13 * 60 + 5; // 1:05 PM
+    const overtimeGrace = 19 * 60 + 5; // 7:05 PM
     const grace = 5; // 5 minute grace
 
     // Calculate late minutes if not already in database
     if (!entry.late_minutes && timeInMinutes !== null) {
       if (entry.session === 'Morning' && timeInMinutes > morningBaseline + grace) {
-        lateMinutes = timeInMinutes - morningBaseline;
+        lateMinutes = timeInMinutes - (morningBaseline + grace);
       } else if (entry.session === 'Afternoon' && timeInMinutes > afternoonBaseline + grace) {
-        lateMinutes = timeInMinutes - afternoonBaseline;
+        lateMinutes = timeInMinutes - (afternoonBaseline + grace);
       } else if (entry.session === 'Overtime' && timeInMinutes > overtimeBaseline + grace) {
-        lateMinutes = timeInMinutes - overtimeBaseline;
+        lateMinutes = timeInMinutes - (overtimeBaseline + grace);
       }
     } else {
       lateMinutes = entry.late_minutes || 0;
     }
 
-    // Calculate hours worked: count from baseline, but use actual check-in if later than baseline
+    // Calculate hours worked with grace period
     if (timeOutMinutes !== null && timeInMinutes !== null) {
-      // If check-in and check-out are the same, no hours worked
       if (timeInMinutes === timeOutMinutes) {
         hoursWorked = 0;
       } else {
-        const morningBaseline = 8 * 60; // 8:00 AM
-        const afternoonBaseline = 13 * 60; // 1:00 PM  
-        const overtimeBaseline = 19 * 60; // 7:00 PM
         const morningEnd = 12 * 60; // 12:00 PM
         const afternoonEnd = 17 * 60; // 5:00 PM
         const overtimeEnd = 22 * 60; // 10:00 PM
 
         if (entry.session === 'Morning') {
-          // Count from 8 AM baseline (or actual check-in if later) to time out (max 12 PM)
-          const effectiveStart = Math.max(timeInMinutes, morningBaseline);
+          // If within grace period (<=8:05 AM), count from baseline (8:00 AM)
+          const effectiveStart = timeInMinutes <= morningGrace ? morningBaseline : timeInMinutes;
           const effectiveEnd = Math.min(timeOutMinutes, morningEnd);
           hoursWorked = Math.max(0, effectiveEnd - effectiveStart);
         } else if (entry.session === 'Afternoon') {
-          // Count from 1 PM baseline (or actual check-in if later) to time out (max 5 PM)
-          const effectiveStart = Math.max(timeInMinutes, afternoonBaseline);
+          // If within grace period (<=1:05 PM), count from baseline (1:00 PM)
+          const effectiveStart = timeInMinutes <= afternoonGrace ? afternoonBaseline : timeInMinutes;
           const effectiveEnd = Math.min(timeOutMinutes, afternoonEnd);
           hoursWorked = Math.max(0, effectiveEnd - effectiveStart);
         } else if (entry.session === 'Overtime') {
-          // Count from 7 PM baseline (or actual check-in if later) to time out (max 10 PM)
-          const effectiveStart = Math.max(timeInMinutes, overtimeBaseline);
+          // If within grace period (<=7:05 PM), count from baseline (7:00 PM)
+          const effectiveStart = timeInMinutes <= overtimeGrace ? overtimeBaseline : timeInMinutes;
           const effectiveEnd = Math.min(timeOutMinutes, overtimeEnd);
           hoursWorked = Math.max(0, effectiveEnd - effectiveStart);
         }

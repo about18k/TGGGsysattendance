@@ -62,18 +62,20 @@ function Profile({ token, user, onLogout }) {
           if (inMinutes !== null && outMinutes !== null) {
             const morningBaseline = 8 * 60; // 8:00 AM
             const afternoonBaseline = 13 * 60; // 1:00 PM
+            const morningGrace = 8 * 60 + 5; // 8:05 AM
+            const afternoonGrace = 13 * 60 + 5; // 1:05 PM
             const morningEnd = 12 * 60; // 12:00 PM
             const afternoonEnd = 17 * 60; // 5:00 PM
             
             // Determine session based on check-in time
             if (inMinutes < 12 * 60) {
-              // Morning session: count from 8 AM baseline to time out (max 12 PM)
-              const effectiveStart = Math.max(inMinutes, morningBaseline);
+              // Morning session: if within grace (<=8:05 AM), count from 8 AM
+              const effectiveStart = inMinutes <= morningGrace ? morningBaseline : inMinutes;
               const effectiveEnd = Math.min(outMinutes, morningEnd);
               totalMinutes += Math.max(0, effectiveEnd - effectiveStart);
             } else {
-              // Afternoon session: count from 1 PM baseline to time out (max 5 PM)
-              const effectiveStart = Math.max(inMinutes, afternoonBaseline);
+              // Afternoon session: if within grace (<=1:05 PM), count from 1 PM
+              const effectiveStart = inMinutes <= afternoonGrace ? afternoonBaseline : inMinutes;
               const effectiveEnd = Math.min(outMinutes, afternoonEnd);
               totalMinutes += Math.max(0, effectiveEnd - effectiveStart);
             }
@@ -86,8 +88,9 @@ function Profile({ token, user, onLogout }) {
           const otOutMinutes = parseMinutes(a.ot_time_out);
           if (otInMinutes !== null && otOutMinutes !== null) {
             const overtimeBaseline = 19 * 60; // 7:00 PM
+            const overtimeGrace = 19 * 60 + 5; // 7:05 PM
             const overtimeEnd = 22 * 60; // 10:00 PM
-            const effectiveStart = Math.max(otInMinutes, overtimeBaseline);
+            const effectiveStart = otInMinutes <= overtimeGrace ? overtimeBaseline : otInMinutes;
             const effectiveEnd = Math.min(otOutMinutes, overtimeEnd);
             totalMinutes += Math.max(0, effectiveEnd - effectiveStart);
           }
