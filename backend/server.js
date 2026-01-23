@@ -336,9 +336,9 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
       standardCheckoutMinutes = 22 * 60;
     }
 
-    // Calculate total hours worked from BASELINE, not actual check-in
+    // Calculate total hours worked from ACTUAL check-in time to checkout
     // Cap at standard checkout time to prevent exceeding session limits
-    let totalMinutesWorked = Math.min(checkOutMinutes, standardCheckoutMinutes) - baselineStartMinutes;
+    let totalMinutesWorked = Math.min(checkOutMinutes, standardCheckoutMinutes) - checkInMinutes;
     if (totalMinutesWorked < 0) totalMinutesWorked += 24 * 60; // Handle overnight
     if (totalMinutesWorked < 0) totalMinutesWorked = 0; // Prevent negative
 

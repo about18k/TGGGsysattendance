@@ -44,8 +44,22 @@ function Dashboard({ token, user, onLogout }) {
   };
 
   const today = getPhilippinesDate();
-  const todaysOpen = attendance.find(a => a.date === today && !a.time_out);
+  // Find if there's an open session today (any session without time_out)
+  const todaysOpen = attendance.find(a => {
+    if (a.date !== today) return false;
+    // Check if any session is open (has time_in but no time_out)
+    const morningOpen = a.morning_time_in && !a.morning_time_out;
+    const afternoonOpen = a.afternoon_time_in && !a.afternoon_time_out;
+    const otOpen = a.ot_time_in && !a.ot_time_out;
+    return morningOpen || afternoonOpen || otOpen;
+  });
   const todaysEntries = attendance.filter(a => a.date === today);
+  
+  console.log('DEBUG - Button State:', {
+    todaysOpen: !!todaysOpen,
+    todaysOpenData: todaysOpen,
+    buttonDisabled: !todaysOpen
+  });
 
   // Debug logging
   useEffect(() => {
@@ -71,15 +85,16 @@ function Dashboard({ token, user, onLogout }) {
 
     if (todaysOpen) return false;
 
-    // Count sessions for today
-    const morningSession = todaysEntries.find(e => e.session === 'Morning');
-    const afternoonSession = todaysEntries.find(e => e.session === 'Afternoon');
-    const overtimeSession = todaysEntries.find(e => e.session === 'Overtime');
+    // Check completed sessions from consolidated data
+    const todayData = todaysEntries[0]; // Consolidated data for today
+    const morningComplete = todayData?.morning_time_in && todayData?.morning_time_out;
+    const afternoonComplete = todayData?.afternoon_time_in && todayData?.afternoon_time_out;
+    const overtimeComplete = todayData?.ot_time_in && todayData?.ot_time_out;
 
     // Allow check-in if current period is available and not yet checked in for that session
-    if (inMorning && !morningSession) return true;
-    if (inAfternoon && !afternoonSession) return true;
-    if (inOvertime && !overtimeSession) return true;
+    if (inMorning && !morningComplete) return true;
+    if (inAfternoon && !afternoonComplete) return true;
+    if (inOvertime && !overtimeComplete) return true;
 
     return false;
   };
@@ -130,22 +145,22 @@ function Dashboard({ token, user, onLogout }) {
       lateMinutes = entry.late_minutes || 0;
     }
 
-    // Calculate hours worked from BASELINE, not actual check-in time
-    if (!entry.total_minutes_worked && timeOutMinutes !== null) {
+    // Calculate hours worked from ACTUAL check-in time, not baseline
+    if (!entry.total_minutes_worked && timeOutMinutes !== null && timeInMinutes !== null) {
       const morningStandardEnd = 12 * 60; // 12:00 PM
       const afternoonStandardEnd = 17 * 60; // 5:00 PM
       const overtimeStandardEnd = 22 * 60; // 10:00 PM
 
       if (entry.session === 'Morning') {
-        // Morning: 8:00 AM to time_out (capped at 12:00 PM)
-        hoursWorked = Math.min(timeOutMinutes, morningStandardEnd) - morningBaseline;
+        // Morning: actual check-in to time_out (capped at 12:00 PM)
+        hoursWorked = Math.min(timeOutMinutes, morningStandardEnd) - timeInMinutes;
       } else if (entry.session === 'Afternoon') {
-        // Afternoon: 1:00 PM to time_out (capped at 5:00 PM)
-        hoursWorked = Math.min(timeOutMinutes, afternoonStandardEnd) - afternoonBaseline;
+        // Afternoon: actual check-in to time_out (capped at 5:00 PM)
+        hoursWorked = Math.min(timeOutMinutes, afternoonStandardEnd) - timeInMinutes;
       } else if (entry.session === 'Overtime') {
-        // Overtime: 7:00 PM to time_out (capped at 10:00 PM)
+        // Overtime: actual check-in to time_out (capped at 10:00 PM)
         let otOut = Math.min(timeOutMinutes, overtimeStandardEnd);
-        hoursWorked = otOut - overtimeBaseline;
+        hoursWorked = otOut - timeInMinutes;
         if (hoursWorked < 0) hoursWorked += 24 * 60; // Handle overnight
       }
       if (hoursWorked < 0) hoursWorked = 0; // Prevent negative values
@@ -196,8 +211,11 @@ function Dashboard({ token, user, onLogout }) {
   };
 
   const truncateText = (text, maxLength = 20) => {
-    if (!text || text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
+    if (!text) return text;
+    // Strip HTML tags first
+    const plainText = text.replace(/<[^>]*>/g, '');
+    if (plainText.length <= maxLength) return plainText;
+    return plainText.substring(0, maxLength) + '...';
   };
 
   const formatTime = (timeStr) => {
@@ -486,6 +504,16 @@ function Dashboard({ token, user, onLogout }) {
   };
 
   const checkOut = async (id) => {
+    console.log('DEBUG - checkOut called');
+    console.log('DEBUG - todaysOpen:', todaysOpen);
+    console.log('DEBUG - id:', id);
+    
+    // Prevent checkout if no active session
+    if (!todaysOpen) {
+      console.log('DEBUG - No active session, returning early');
+      return;
+    }
+    
     // For interns with consolidated data, find the actual open session ID
     let sessionId = id;
     if (!sessionId && todaysOpen?.allSessions) {
@@ -1003,7 +1031,8 @@ function Dashboard({ token, user, onLogout }) {
                       justifyContent: 'center',
                       gap: '10px',
                       opacity: !canCheckInNow() ? 0.6 : 1,
-                      cursor: !canCheckInNow() ? 'not-allowed' : 'pointer'
+                      cursor: !canCheckInNow() ? 'not-allowed' : 'pointer',
+                      pointerEvents: (!canCheckInNow() || todaysOpen) ? 'none' : 'auto'
                     }}
                   >
                     {buttonLoading ? (
@@ -1127,7 +1156,8 @@ function Dashboard({ token, user, onLogout }) {
                         justifyContent: 'center',
                         gap: '8px',
                         opacity: !todaysOpen ? 0.6 : 1,
-                        cursor: !todaysOpen ? 'not-allowed' : 'pointer'
+                        cursor: !todaysOpen ? 'not-allowed' : 'pointer',
+                        pointerEvents: !todaysOpen ? 'none' : 'auto'
                       }}
                     >
                       {buttonLoading ? (
@@ -1242,7 +1272,6 @@ function Dashboard({ token, user, onLogout }) {
                       .filter(a => !filterDate || a.date === filterDate)
                       .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                       .map((a) => {
-                        const { lateMinutes, hoursWorked } = user.role === 'coordinator' ? calculateSessionMetrics(a) : { lateMinutes: 0, hoursWorked: 0 };
                         return (
                         <tr key={(a.id || a.date) + (a.user_id || '')}>
                           {user.role === 'coordinator' && <td>{a.full_name}</td>}
