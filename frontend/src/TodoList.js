@@ -13,6 +13,7 @@ function TodoList({ token, user }) {
   const [groups, setGroups] = useState([]);
   const [availableUsers, setAvailableUsers] = useState([]);
   const [interns, setInterns] = useState([]);
+  const [departmentTasks, setDepartmentTasks] = useState([]);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dateTask, setDateTask] = useState('');
@@ -31,7 +32,8 @@ function TodoList({ token, user }) {
   const [filterText, setFilterText] = useState('');
   const [filterMember, setFilterMember] = useState('');
 
-  const [deadlineDate, setDeadlineDate] = useState(new Date());
+  const [deadlineDate, setDeadlineDate] = useState(null);
+  const [departmentSubTab, setDepartmentSubTab] = useState('active');
   const [showCalendar, setShowCalendar] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmingTodo, setConfirmingTodo] = useState(null);
@@ -100,9 +102,24 @@ function TodoList({ token, user }) {
     }
   }, [token, user?.role]);
 
+  const fetchDepartmentTasks = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/department-tasks`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDepartmentTasks(data);
+    } catch (err) {
+      console.error('Failed to fetch department tasks:', err);
+    }
+  }, [token]);
+
   useEffect(() => {
     fetchUserProfile();
-    fetchTodos(activeTab);
+    if (activeTab === 'department') {
+      fetchDepartmentTasks();
+    } else {
+      fetchTodos(activeTab);
+    }
     fetchGroups();
     if (user?.role === 'coordinator' || userProfile?.is_leader) {
       fetchAvailableUsers();
@@ -322,6 +339,72 @@ function TodoList({ token, user }) {
     }
   };
 
+  const suggestDepartmentTask = async (e) => {
+    e.preventDefault();
+    if (!dateTask.trim()) return;
+    try {
+      await axios.post(`${API}/department-tasks`, {
+        task: dateTask,
+        description: '',
+        start_date: selectedDate ? selectedDate.toISOString().split('T')[0] : null,
+        deadline: deadlineDate ? deadlineDate.toISOString().split('T')[0] : null
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDateTask('');
+      setSelectedDate(new Date());
+      setDeadlineDate(null);
+      fetchDepartmentTasks();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to suggest task.');
+    }
+  };
+
+  const grabDepartmentTask = async (taskId) => {
+    try {
+      await axios.post(`${API}/department-tasks/${taskId}/grab`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchDepartmentTasks();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to grab task.');
+    }
+  };
+
+  const completeDepartmentTask = async (taskId) => {
+    try {
+      await axios.post(`${API}/department-tasks/${taskId}/complete`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchDepartmentTasks();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to complete task.');
+    }
+  };
+
+  const abandonDepartmentTask = async (taskId) => {
+    try {
+      await axios.post(`${API}/department-tasks/${taskId}/abandon`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchDepartmentTasks();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to abandon task.');
+    }
+  };
+
+  const deleteDepartmentTask = async (taskId) => {
+    if (!window.confirm('Delete this task?')) return;
+    try {
+      await axios.delete(`${API}/department-tasks/${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchDepartmentTasks();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to delete task.');
+    }
+  };
+
 
 
   const changeMonth = (offset) => {
@@ -365,24 +448,6 @@ function TodoList({ token, user }) {
     return false;
   };
 
-  const canEditTodo = (todo) => {
-    if (todo.todo_type === 'personal') return todo.user_id === userProfile?.id;
-    if (todo.todo_type === 'group') {
-      const group = groups.find(g => g.id === todo.group_id);
-      return group?.leader_id === userProfile?.id;
-    }
-    if (todo.todo_type === 'assigned') {
-      return todo.assigned_by === userProfile?.id || isCoordinator;
-    }
-    return false;
-  };
-
-  const canDeleteTodo = (todo) => {
-    return canEditTodo(todo);
-  };
-
-
-
   const getGroupMembersForAssign = () => {
     if (isCoordinator) {
       return interns;
@@ -414,6 +479,7 @@ function TodoList({ token, user }) {
   const tabs = [
     { id: 'personal', label: 'Personal', icon: 'user' },
     { id: 'team', label: 'Team', icon: 'team' },
+    { id: 'department', label: 'Department', icon: 'building' },
     // Group tab only visible to leaders - shows pending suggestions and pending completions
     ...(isLeader ? [{ id: 'group', label: 'Manage', icon: 'clipboard' }] : [])
   ];
@@ -461,6 +527,7 @@ function TodoList({ token, user }) {
             {activeTab === 'personal' && 'Your private tasks - only you can see these'}
             {activeTab === 'team' && 'Team tasks - ongoing and completed tasks from your group'}
             {activeTab === 'group' && 'Manage pending suggestions and task completions'}
+            {activeTab === 'department' && 'Department tasks - suggest, grab, and complete tasks with your department'}
           </p>
 
           <Calendar show={showCalendar} selectedDate={selectedDate} setSelectedDate={setSelectedDate} changeMonth={changeMonth} Icon={Icon} />
@@ -503,7 +570,7 @@ function TodoList({ token, user }) {
 
 
 
-          {activeTab !== 'team' && (
+          {activeTab !== 'team' && activeTab !== 'department' && (
             <div style={{ marginTop: 'auto', padding: '1rem', background: 'rgba(255, 113, 32, 0.1)', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)' }}>
               <p style={{ fontSize: '0.85rem', color: '#e8eaed', marginBottom: '0.5rem' }}>
                 {activeTab === 'personal' && 'These tasks are private to you.'}
@@ -514,8 +581,82 @@ function TodoList({ token, user }) {
 
           {activeTab === 'team' && groups.length > 0 && <GroupInfo groups={groups} userProfile={userProfile} Icon={Icon} />}
 
-          {(activeTab !== 'team' || !isLeader) && (
+          {(activeTab !== 'team' || !isLeader) && activeTab !== 'department' && (
             <TaskForm activeTab={activeTab} isLeader={isLeader} canAddTodo={canAddTodo()} dateTask={dateTask} setDateTask={setDateTask} selectedAssignee={selectedAssignee} setSelectedAssignee={setSelectedAssignee} selectedDate={selectedDate} setSelectedDate={setSelectedDate} deadlineDate={deadlineDate} setDeadlineDate={setDeadlineDate} onSubmit={addDateTodo} getGroupMembersForAssign={getGroupMembersForAssign} />
+          )}
+
+          {activeTab === 'department' && (
+            <form onSubmit={suggestDepartmentTask} style={{ marginTop: '1rem' }}>
+              <input
+                type="text"
+                placeholder="Suggest a task for your department..."
+                value={dateTask}
+                onChange={(e) => setDateTask(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 113, 32, 0.3)',
+                  borderRadius: '8px',
+                  color: '#e8eaed',
+                  marginBottom: '0.5rem',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <div>
+                <label style={{ fontSize: '0.75rem', color: '#9ca3af', display: 'block', marginBottom: '0.25rem' }}>Start Date (Optional)</label>
+                <input
+                  type="date"
+                  value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => setSelectedDate(e.target.value ? new Date(e.target.value) : null)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 113, 32, 0.3)',
+                    borderRadius: '8px',
+                    color: '#e8eaed',
+                    colorScheme: 'dark',
+                    boxSizing: 'border-box',
+                    marginBottom: '0.5rem'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.75rem', color: '#9ca3af', display: 'block', marginBottom: '0.25rem' }}>Deadline (Optional)</label>
+                <input
+                  type="date"
+                  value={deadlineDate ? deadlineDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => setDeadlineDate(e.target.value ? new Date(e.target.value) : null)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 113, 32, 0.3)',
+                    borderRadius: '8px',
+                    color: '#e8eaed',
+                    colorScheme: 'dark',
+                    boxSizing: 'border-box',
+                    marginBottom: '0.5rem'
+                  }}
+                />
+              </div>
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  background: '#FF7120',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Suggest Task
+              </button>
+            </form>
           )}
         </div>
 
@@ -524,6 +665,156 @@ function TodoList({ token, user }) {
         <div className="checkin-form todo-main" style={{ flex: '1 1 500px', order: 3, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', maxHeight: '650px', overflow: 'hidden' }}>
           {loading ? (
             <CardSkeleton />
+          ) : activeTab === 'department' ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <h3 style={{ margin: 0 }}>Department Tasks</h3>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => setDepartmentSubTab('active')}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: departmentSubTab === 'active' ? '#FF7120' : 'rgba(255, 255, 255, 0.05)',
+                      color: departmentSubTab === 'active' ? 'white' : '#9ca3af',
+                      border: `1px solid ${departmentSubTab === 'active' ? '#FF7120' : 'rgba(255, 113, 32, 0.3)'}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Active
+                  </button>
+                  <button
+                    onClick={() => setDepartmentSubTab('completed')}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: departmentSubTab === 'completed' ? '#FF7120' : 'rgba(255, 255, 255, 0.05)',
+                      color: departmentSubTab === 'completed' ? 'white' : '#9ca3af',
+                      border: `1px solid ${departmentSubTab === 'completed' ? '#FF7120' : 'rgba(255, 113, 32, 0.3)'}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Completed
+                  </button>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
+                {departmentSubTab === 'active' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                    {/* Suggested Tasks */}
+                    <div>
+                      <h3 style={{ color: '#e8eaed', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Icon name="lightbulb" size={16} color="#f5a524" strokeWidth={2} />
+                        Suggested
+                        <span style={{ background: 'rgba(245, 165, 36, 0.2)', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem' }}>
+                          {departmentTasks.filter(t => t.status === 'suggested').length}
+                        </span>
+                      </h3>
+                      {departmentTasks.filter(t => t.status === 'suggested').map(task => (
+                        <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(245, 165, 36, 0.3)' }}>
+                          <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500' }}>{task.task}</p>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Suggested by {task.suggester?.full_name}</span>
+                            {task.created_at && <span style={{ background: 'rgba(156, 163, 175, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#9ca3af' }}>Created: {new Date(task.created_at).toLocaleDateString()}</span>}
+                            {task.start_date && <span style={{ background: 'rgba(52, 152, 219, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#3498db' }}>Start: {new Date(task.start_date).toLocaleDateString()}</span>}
+                            {task.deadline && <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#e74c3c' }}>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>}
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              onClick={() => grabDepartmentTask(task.id)}
+                              style={{ flex: 1, padding: '0.5rem', background: '#FF7120', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                            >
+                              Grab
+                            </button>
+                            {(task.suggested_by === userProfile?.id || isCoordinator) && (
+                              <button
+                                onClick={() => deleteDepartmentTask(task.id)}
+                                style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {departmentTasks.filter(t => t.status === 'suggested').length === 0 && (
+                        <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No suggested tasks</p>
+                      )}
+                    </div>
+
+                    {/* Grabbed Tasks */}
+                    <div>
+                      <h3 style={{ color: '#e8eaed', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Icon name="clock" size={16} color="#FF7120" strokeWidth={2} />
+                        In Progress
+                        <span style={{ background: 'rgba(255, 113, 32, 0.2)', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem' }}>
+                          {departmentTasks.filter(t => t.status === 'grabbed').length}
+                        </span>
+                      </h3>
+                      {departmentTasks.filter(t => t.status === 'grabbed').map(task => (
+                        <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(255, 113, 32, 0.3)' }}>
+                          <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500' }}>{task.task}</p>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Grabbed by {task.grabber?.full_name}</span>
+                            {task.grabbed_at && <span style={{ background: 'rgba(156, 163, 175, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#9ca3af' }}>Started: {new Date(task.grabbed_at).toLocaleDateString()}</span>}
+                            {task.start_date && <span style={{ background: 'rgba(52, 152, 219, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#3498db' }}>Start: {new Date(task.start_date).toLocaleDateString()}</span>}
+                            {task.deadline && <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#e74c3c' }}>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>}
+                          </div>
+                          {task.grabbed_by === userProfile?.id && (
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button
+                                onClick={() => completeDepartmentTask(task.id)}
+                                style={{ flex: 1, padding: '0.5rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                              >
+                                Complete
+                              </button>
+                              <button
+                                onClick={() => abandonDepartmentTask(task.id)}
+                                style={{ padding: '0.5rem', background: 'rgba(156, 163, 175, 0.2)', color: '#9ca3af', border: '1px solid rgba(156, 163, 175, 0.3)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                              >
+                                Abandon
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {departmentTasks.filter(t => t.status === 'grabbed').length === 0 && (
+                        <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No tasks in progress</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 style={{ color: '#e8eaed', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Icon name="checkCircle" size={16} color="#28a745" strokeWidth={2} />
+                      Completed Tasks
+                      <span style={{ background: 'rgba(40, 167, 69, 0.2)', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem', color: '#28a745' }}>
+                        {departmentTasks.filter(t => t.status === 'completed').length}
+                      </span>
+                    </h3>
+                    {departmentTasks.filter(t => t.status === 'completed').map(task => (
+                      <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(40, 167, 69, 0.3)' }}>
+                        <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500', textDecoration: 'line-through', opacity: 0.7 }}>{task.task}</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Completed by {task.completer?.full_name}</span>
+                          {task.completed_at && <span style={{ background: 'rgba(40, 167, 69, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#28a745' }}>Completed: {new Date(task.completed_at).toLocaleDateString()}</span>}
+                          {task.grabbed_at && <span style={{ background: 'rgba(156, 163, 175, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#9ca3af' }}>Started: {new Date(task.grabbed_at).toLocaleDateString()}</span>}
+                          {task.start_date && <span style={{ background: 'rgba(52, 152, 219, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#3498db' }}>Start: {new Date(task.start_date).toLocaleDateString()}</span>}
+                          {task.deadline && <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#e74c3c' }}>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                    ))}
+                    {departmentTasks.filter(t => t.status === 'completed').length === 0 && (
+                      <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No completed tasks</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
             <>
               <h3 style={{ flexShrink: 0 }}>Tasks for {selectedDate.toLocaleDateString()}</h3>

@@ -6,6 +6,8 @@ const Icon = ({ name, size = 16, color = 'currentColor', strokeWidth = 1.8 }) =>
     user: <><circle cx="12" cy="7" r="4" /><path d="M5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2" /></>,
     team: <><circle cx="16" cy="9" r="3" /><circle cx="8" cy="9" r="3" /><path d="M3 20v-1.5C3 16.6 5.2 15 8 15c1.2 0 2.4.3 3.3.9" /><path d="M21 20v-1.5C21 16.6 18.8 15 16 15c-1.2 0-2.4.3-3.3.9" /></>,
     clipboard: <><path d="M16 4h-2l-.5-1h-3L10 4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" /><path d="M9 9h6M9 13h6M9 17h4" /></>,
+    building: <><rect x="4" y="2" width="16" height="20" rx="1" /><path d="M9 22v-4h6v4" /><path d="M8 6h.01" /><path d="M16 6h.01" /><path d="M12 6h.01" /><path d="M8 10h.01" /><path d="M16 10h.01" /><path d="M12 10h.01" /><path d="M8 14h.01" /><path d="M16 14h.01" /><path d="M12 14h.01" /></>,
+    lightbulb: <><path d="M9 18h6" /><path d="M10 22h4" /><path d="M15 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /><path d="M12 3v2" /><path d="M12 11v7" /></>,
     check: <path d="M5 13l4 4 10-10" />,
     checkCircle: <><circle cx="12" cy="12" r="9" /><path d="M9 12l2 2 4-4" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
