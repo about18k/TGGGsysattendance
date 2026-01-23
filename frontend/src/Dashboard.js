@@ -146,19 +146,26 @@ function Dashboard({ token, user, onLogout }) {
     }
 
     // Calculate hours worked from BASELINE, capped at 4 hours per session
-    if (!entry.total_minutes_worked && timeOutMinutes !== null && timeInMinutes !== null) {
+    // ALWAYS recalculate to ensure correct hours from baseline
+    if (timeOutMinutes !== null && timeInMinutes !== null) {
       const morningStandardEnd = 12 * 60; // 12:00 PM
       const afternoonStandardEnd = 17 * 60; // 5:00 PM
       const overtimeStandardEnd = 22 * 60; // 10:00 PM
 
       if (entry.session === 'Morning') {
-        // Morning: 8:00 AM baseline to time_out (capped at 12:00 PM), max 4 hours
-        hoursWorked = Math.min(timeOutMinutes, morningStandardEnd) - morningBaseline;
-        hoursWorked = Math.min(hoursWorked, 240); // Cap at 4 hours
+        // Morning: Count from 8:00 AM baseline to time_out (capped at 12:00 PM), max 4 hours
+        // Use baseline (8 AM) as start, not actual check-in time
+        const effectiveStart = morningBaseline; // Always 8:00 AM
+        const effectiveOut = Math.min(timeOutMinutes, morningStandardEnd);
+        hoursWorked = effectiveOut - effectiveStart;
+        hoursWorked = Math.max(0, Math.min(hoursWorked, 240)); // Cap at 4 hours
       } else if (entry.session === 'Afternoon') {
-        // Afternoon: 1:00 PM baseline to time_out (capped at 5:00 PM), max 4 hours
-        hoursWorked = Math.min(timeOutMinutes, afternoonStandardEnd) - afternoonBaseline;
-        hoursWorked = Math.min(hoursWorked, 240); // Cap at 4 hours
+        // Afternoon: Count from 1:00 PM baseline to time_out (capped at 5:00 PM), max 4 hours
+        // Use baseline (1 PM) as start, not actual check-in time
+        const effectiveStart = afternoonBaseline; // Always 1:00 PM
+        const effectiveOut = Math.min(timeOutMinutes, afternoonStandardEnd);
+        hoursWorked = effectiveOut - effectiveStart;
+        hoursWorked = Math.max(0, Math.min(hoursWorked, 240)); // Cap at 4 hours
       } else if (entry.session === 'Overtime') {
         // Overtime: 7:00 PM baseline to time_out (capped at 10:00 PM), max 3 hours
         let otOut = Math.min(timeOutMinutes, overtimeStandardEnd);
@@ -166,7 +173,6 @@ function Dashboard({ token, user, onLogout }) {
         if (hoursWorked < 0) hoursWorked += 24 * 60; // Handle overnight
         hoursWorked = Math.min(hoursWorked, 180); // Cap at 3 hours
       }
-      if (hoursWorked < 0) hoursWorked = 0; // Prevent negative values
     } else {
       hoursWorked = entry.total_minutes_worked || 0;
     }

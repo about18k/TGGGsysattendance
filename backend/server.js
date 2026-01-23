@@ -339,7 +339,6 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
     // Calculate total hours worked from BASELINE to checkout (capped at 4 hours per session)
     // This ensures: Morning 8AM-12PM (4h), Afternoon 1PM-5PM (4h), OT 7PM-10PM (3h)
     let totalMinutesWorked = Math.min(checkOutMinutes, standardCheckoutMinutes) - baselineStartMinutes;
-    if (totalMinutesWorked < 0) totalMinutesWorked += 24 * 60; // Handle overnight
     if (totalMinutesWorked < 0) totalMinutesWorked = 0; // Prevent negative
     
     // Cap at maximum session duration

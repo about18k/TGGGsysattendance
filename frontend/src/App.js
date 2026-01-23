@@ -41,7 +41,7 @@ function App() {
       return () => clearInterval(interval);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []); // Only run once on mount, not when token changes
 
   const validateAndFetchProfile = async () => {
     try {
