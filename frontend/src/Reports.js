@@ -60,10 +60,48 @@ function Reports({ token }) {
     }
   };
 
+  const parseMinutes = (timeStr) => {
+    if (!timeStr) return null;
+    if (!timeStr.includes('AM') && !timeStr.includes('PM')) {
+      const parts = timeStr.split(':');
+      const h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      return h * 60 + m;
+    }
+    const [time, meridiem] = timeStr.split(' ');
+    if (!meridiem) return null;
+    let [h, m] = time.split(':').map(Number);
+    if (meridiem === 'PM' && h !== 12) h += 12;
+    if (meridiem === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  const calculateMinutesWorked = (timeIn, timeOut, session) => {
+    if (!timeIn || !timeOut) return 0;
+    const inMinutes = parseMinutes(timeIn);
+    const outMinutes = parseMinutes(timeOut);
+    if (inMinutes === null || outMinutes === null) return 0;
+    
+    const morningBaseline = 8 * 60;
+    const afternoonBaseline = 13 * 60;
+    const overtimeBaseline = 19 * 60;
+    const morningEnd = 12 * 60;
+    const afternoonEnd = 17 * 60;
+    const overtimeEnd = 22 * 60;
+    
+    if (session === 'Morning') {
+      return Math.max(0, Math.min(outMinutes, morningEnd) - morningBaseline);
+    } else if (session === 'Afternoon') {
+      return Math.max(0, Math.min(outMinutes, afternoonEnd) - afternoonBaseline);
+    } else if (session === 'Overtime') {
+      return Math.max(0, Math.min(outMinutes, overtimeEnd) - overtimeBaseline);
+    }
+    return 0;
+  };
+
   const fetchInternAttendance = async (internId) => {
     const filtered = allAttendance.filter(a => a.user_id === internId);
     
-    // Consolidate by date
     const consolidatedByDate = {};
     filtered.forEach(entry => {
       if (!consolidatedByDate[entry.date]) {
@@ -98,7 +136,14 @@ function Reports({ token }) {
         record.ot_time_out = entry.time_out;
       }
       
-      record.total_minutes_worked += (entry.total_minutes_worked || (entry.time_out ? 240 : 0));
+      let minutesWorked = 0;
+      if (entry.total_minutes_worked) {
+        minutesWorked = entry.total_minutes_worked;
+      } else if (entry.time_out) {
+        minutesWorked = calculateMinutesWorked(entry.time_in, entry.time_out, session);
+      }
+      
+      record.total_minutes_worked += minutesWorked;
       record.total_late_minutes += (entry.late_minutes || 0);
       
       if (entry.work_documentation) record.work_documentation = entry.work_documentation;
@@ -165,15 +210,16 @@ function Reports({ token }) {
       if (record.total_minutes_worked) {
         totalMinutesWorked += record.total_minutes_worked;
       } else if (record.time_out) {
-        // Fallback: estimate 4 hours per session for old records
-        totalMinutesWorked += 240;
+        const session = determineSession(record.time_in);
+        totalMinutesWorked += calculateMinutesWorked(record.time_in, record.time_out, session);
       }
     });
     
     const totalHours = Math.floor(totalMinutesWorked / 60);
+    const totalMinutes = totalMinutesWorked % 60;
     const totalLateHours = Math.floor(totalLateMinutes / 60);
     
-    return { total, onTime, late, totalLateMinutes, totalLateHours, totalHours };
+    return { total, onTime, late, totalLateMinutes, totalLateHours, totalHours, totalMinutes };
   };
 
   const handleAdminCheckIn = async () => {
@@ -298,7 +344,7 @@ function Reports({ token }) {
                   </div>
                   <div style={{ background: '#00273C', padding: '0.75rem', borderRadius: '8px' }}>
                     <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>Total Hours</p>
-                    <p style={{ fontSize: '1.5rem', fontWeight: '600', color: '#FF7120', margin: 0 }}>{stats.totalHours}h</p>
+                    <p style={{ fontSize: '1.5rem', fontWeight: '600', color: '#FF7120', margin: 0 }}>{stats.totalHours}h {stats.totalMinutes}m</p>
                   </div>
                   <div style={{ background: '#00273C', padding: '0.75rem', borderRadius: '8px' }}>
                     <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>On-Time</p>
