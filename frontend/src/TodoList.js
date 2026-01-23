@@ -17,9 +17,13 @@ function TodoList({ token, user }) {
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dateTask, setDateTask] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   const [activeTab, setActiveTab] = useState('personal');
+  const [teamSubTab, setTeamSubTab] = useState('tasks');
   const [userProfile, setUserProfile] = useState(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showManageGroupModal, setShowManageGroupModal] = useState(false);
@@ -138,8 +142,9 @@ function TodoList({ token, user }) {
 
   const addDateTodo = async (e) => {
     e.preventDefault();
-    if (!dateTask.trim()) return;
+    if (!dateTask.trim() || submitting) return;
 
+    setSubmitting(true);
     try {
       const taskWithDate = `[${selectedDate.toLocaleDateString()}] ${dateTask}`;
       const todoData = {
@@ -147,8 +152,7 @@ function TodoList({ token, user }) {
         todo_type: 'personal'
       };
 
-      if (activeTab === 'team') {
-        // Team tab: members suggest tasks (submitted as group todo, needs leader confirmation)
+      if (activeTab === 'team' && teamSubTab === 'tasks') {
         const userGroupId = groups.find(g =>
           g.members?.some(m =>
             String(m.user?.id) === String(userProfile?.id) ||
@@ -160,8 +164,7 @@ function TodoList({ token, user }) {
           todoData.todo_type = 'group';
           todoData.group_id = userGroupId;
         }
-      } else if (activeTab === 'group' && isLeader) {
-        // Group tab (Manage): leader creates assigned tasks with dates
+      } else if (activeTab === 'team' && teamSubTab === 'manage' && isLeader) {
         const leaderGroupId = groups.find(g => g.leader_id === userProfile?.id)?.id;
 
         if (selectedAssignee) {
@@ -180,20 +183,28 @@ function TodoList({ token, user }) {
       if (deadlineDate) {
         todoData.deadline = deadlineDate.toISOString().split('T')[0];
       }
+      if (taskDescription && taskDescription.trim()) {
+        todoData.description = taskDescription.trim();
+      }
 
       await axios.post(`${API}/todos`, todoData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDateTask('');
+      setTaskDescription('');
       setSelectedAssignee('');
       await fetchTodos(activeTab);
     } catch (error) {
       console.error('Error adding task:', error);
       alert(error.response?.data?.error || 'Failed to add task.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const toggleTodo = async (id, completed) => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await axios.put(`${API}/todos/${id}`, { completed: !completed }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -201,10 +212,14 @@ function TodoList({ token, user }) {
       fetchTodos(activeTab);
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to update task.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
   const deleteTodo = async (id) => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await axios.delete(`${API}/todos/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -212,6 +227,8 @@ function TodoList({ token, user }) {
       fetchTodos(activeTab);
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to delete task.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
@@ -246,6 +263,8 @@ function TodoList({ token, user }) {
 
 
   const confirmCompletion = async (id) => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await axios.post(`${API}/todos/${id}/confirm-completion`, {}, {
         headers: { Authorization: `Bearer ${token}` }
@@ -253,10 +272,14 @@ function TodoList({ token, user }) {
       fetchTodos(activeTab);
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to confirm completion.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
   const rejectCompletion = async (id) => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await axios.post(`${API}/todos/${id}/reject-completion`, {}, {
         headers: { Authorization: `Bearer ${token}` }
@@ -264,6 +287,8 @@ function TodoList({ token, user }) {
       fetchTodos(activeTab);
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to reject completion.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
@@ -341,26 +366,32 @@ function TodoList({ token, user }) {
 
   const suggestDepartmentTask = async (e) => {
     e.preventDefault();
-    if (!dateTask.trim()) return;
+    if (!dateTask.trim() || submitting) return;
+    setSubmitting(true);
     try {
       await axios.post(`${API}/department-tasks`, {
         task: dateTask,
-        description: '',
+        description: taskDescription,
         start_date: selectedDate ? selectedDate.toISOString().split('T')[0] : null,
         deadline: deadlineDate ? deadlineDate.toISOString().split('T')[0] : null
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDateTask('');
+      setTaskDescription('');
       setSelectedDate(new Date());
       setDeadlineDate(null);
       fetchDepartmentTasks();
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to suggest task.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const grabDepartmentTask = async (taskId) => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await axios.post(`${API}/department-tasks/${taskId}/grab`, {}, {
         headers: { Authorization: `Bearer ${token}` }
@@ -368,10 +399,14 @@ function TodoList({ token, user }) {
       fetchDepartmentTasks();
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to grab task.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
   const completeDepartmentTask = async (taskId) => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await axios.post(`${API}/department-tasks/${taskId}/complete`, {}, {
         headers: { Authorization: `Bearer ${token}` }
@@ -379,10 +414,14 @@ function TodoList({ token, user }) {
       fetchDepartmentTasks();
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to complete task.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
   const abandonDepartmentTask = async (taskId) => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await axios.post(`${API}/department-tasks/${taskId}/abandon`, {}, {
         headers: { Authorization: `Bearer ${token}` }
@@ -390,11 +429,15 @@ function TodoList({ token, user }) {
       fetchDepartmentTasks();
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to abandon task.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
   const deleteDepartmentTask = async (taskId) => {
     if (!window.confirm('Delete this task?')) return;
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await axios.delete(`${API}/department-tasks/${taskId}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -402,6 +445,8 @@ function TodoList({ token, user }) {
       fetchDepartmentTasks();
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to delete task.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
@@ -441,10 +486,8 @@ function TodoList({ token, user }) {
 
   const canAddTodo = () => {
     if (activeTab === 'personal') return true;
-    // Team tab: only members can suggest tasks (leaders use Manage tab)
-    if (activeTab === 'team') return !isLeader && groups.length > 0;
-    // Group tab (Manage): only leaders can add/assign tasks
-    if (activeTab === 'group') return isLeader && leaderHasGroup;
+    if (activeTab === 'team' && teamSubTab === 'tasks') return !isLeader && groups.length > 0;
+    if (activeTab === 'team' && teamSubTab === 'manage') return isLeader && leaderHasGroup;
     return false;
   };
 
@@ -479,9 +522,7 @@ function TodoList({ token, user }) {
   const tabs = [
     { id: 'personal', label: 'Personal', icon: 'user' },
     { id: 'team', label: 'Team', icon: 'team' },
-    { id: 'department', label: 'Department', icon: 'building' },
-    // Group tab only visible to leaders - shows pending suggestions and pending completions
-    ...(isLeader ? [{ id: 'group', label: 'Manage', icon: 'clipboard' }] : [])
+    { id: 'department', label: 'Department', icon: 'building' }
   ];
 
   // eslint-disable-next-line no-unused-vars
@@ -489,8 +530,42 @@ function TodoList({ token, user }) {
 
   return (
     <div className="dashboard" style={{ overflowX: 'hidden' }}>
-      <TabNavigation tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} Icon={Icon} />
-      {activeTab === 'group' && (
+      <TabNavigation tabs={tabs} activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); if (tab === 'team') setTeamSubTab('tasks'); }} Icon={Icon} />
+      {activeTab === 'team' && isLeader && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
+          <button
+            onClick={() => setTeamSubTab('tasks')}
+            style={{
+              padding: '0.5rem 0.75rem',
+              background: teamSubTab === 'tasks' ? '#FF7120' : 'transparent',
+              color: teamSubTab === 'tasks' ? 'white' : '#9ca3af',
+              border: `1px solid ${teamSubTab === 'tasks' ? '#FF7120' : 'rgba(255, 113, 32, 0.3)'}`,
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: '600'
+            }}
+          >
+            Tasks
+          </button>
+          <button
+            onClick={() => setTeamSubTab('manage')}
+            style={{
+              padding: '0.5rem 0.75rem',
+              background: teamSubTab === 'manage' ? '#FF7120' : 'transparent',
+              color: teamSubTab === 'manage' ? 'white' : '#9ca3af',
+              border: `1px solid ${teamSubTab === 'manage' ? '#FF7120' : 'rgba(255, 113, 32, 0.3)'}`,
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: '600'
+            }}
+          >
+            Manage
+          </button>
+        </div>
+      )}
+      {activeTab === 'team' && teamSubTab === 'manage' && (
         <ManagementButtons isLeader={isLeader} isCoordinator={isCoordinator} leaderHasGroup={leaderHasGroup} onCreateGroup={() => { setShowGroupModal(true); fetchAvailableUsers(); }} onManageGroups={() => { setShowManageGroupModal(true); fetchAvailableUsers(); }} onManageLeaders={() => { setShowLeaderModal(true); fetchInterns(); }} groups={groups} Icon={Icon} />
       )}
 
@@ -525,15 +600,15 @@ function TodoList({ token, user }) {
           </div>
           <p style={{ marginBottom: '1rem' }}>
             {activeTab === 'personal' && 'Your private tasks - only you can see these'}
-            {activeTab === 'team' && 'Team tasks - ongoing and completed tasks from your group'}
-            {activeTab === 'group' && 'Manage pending suggestions and task completions'}
+            {activeTab === 'team' && teamSubTab === 'tasks' && 'Team tasks - ongoing and completed tasks from your group'}
+            {activeTab === 'team' && teamSubTab === 'manage' && 'Manage pending suggestions and task completions'}
             {activeTab === 'department' && 'Department tasks - suggest, grab, and complete tasks with your department'}
           </p>
 
           <Calendar show={showCalendar} selectedDate={selectedDate} setSelectedDate={setSelectedDate} changeMonth={changeMonth} Icon={Icon} />
 
           {/* Message for leaders without groups */}
-          {activeTab === 'group' && isLeader && !leaderHasGroup && (
+          {activeTab === 'team' && teamSubTab === 'manage' && isLeader && !leaderHasGroup && (
             <div style={{
               padding: '2rem',
               textAlign: 'center',
@@ -574,15 +649,24 @@ function TodoList({ token, user }) {
             <div style={{ marginTop: 'auto', padding: '1rem', background: 'rgba(255, 113, 32, 0.1)', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)' }}>
               <p style={{ fontSize: '0.85rem', color: '#e8eaed', marginBottom: '0.5rem' }}>
                 {activeTab === 'personal' && 'These tasks are private to you.'}
-                {activeTab === 'group' && 'Team members can suggest tasks; leaders confirm before work starts.'}
+              </p>
+            </div>
+          )}
+          {activeTab === 'team' && teamSubTab === 'manage' && (
+            <div style={{ marginTop: 'auto', padding: '1rem', background: 'rgba(255, 113, 32, 0.1)', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)' }}>
+              <p style={{ fontSize: '0.85rem', color: '#e8eaed', marginBottom: '0.5rem' }}>
+                Team members can suggest tasks; leaders confirm before work starts.
               </p>
             </div>
           )}
 
-          {activeTab === 'team' && groups.length > 0 && <GroupInfo groups={groups} userProfile={userProfile} Icon={Icon} />}
+          {activeTab === 'team' && teamSubTab === 'tasks' && groups.length > 0 && <GroupInfo groups={groups} userProfile={userProfile} Icon={Icon} />}
 
-          {(activeTab !== 'team' || !isLeader) && activeTab !== 'department' && (
-            <TaskForm activeTab={activeTab} isLeader={isLeader} canAddTodo={canAddTodo()} dateTask={dateTask} setDateTask={setDateTask} selectedAssignee={selectedAssignee} setSelectedAssignee={setSelectedAssignee} selectedDate={selectedDate} setSelectedDate={setSelectedDate} deadlineDate={deadlineDate} setDeadlineDate={setDeadlineDate} onSubmit={addDateTodo} getGroupMembersForAssign={getGroupMembersForAssign} />
+          {activeTab === 'personal' && (
+            <TaskForm activeTab={activeTab} isLeader={isLeader} canAddTodo={canAddTodo()} dateTask={dateTask} setDateTask={setDateTask} taskDescription={taskDescription} setTaskDescription={setTaskDescription} selectedAssignee={selectedAssignee} setSelectedAssignee={setSelectedAssignee} selectedDate={selectedDate} setSelectedDate={setSelectedDate} deadlineDate={deadlineDate} setDeadlineDate={setDeadlineDate} onSubmit={addDateTodo} getGroupMembersForAssign={getGroupMembersForAssign} submitting={submitting} />
+          )}
+          {activeTab === 'team' && teamSubTab === 'manage' && (
+            <TaskForm activeTab="group" isLeader={isLeader} canAddTodo={canAddTodo()} dateTask={dateTask} setDateTask={setDateTask} taskDescription={taskDescription} setTaskDescription={setTaskDescription} selectedAssignee={selectedAssignee} setSelectedAssignee={setSelectedAssignee} selectedDate={selectedDate} setSelectedDate={setSelectedDate} deadlineDate={deadlineDate} setDeadlineDate={setDeadlineDate} onSubmit={addDateTodo} getGroupMembersForAssign={getGroupMembersForAssign} submitting={submitting} />
           )}
 
           {activeTab === 'department' && (
@@ -592,6 +676,7 @@ function TodoList({ token, user }) {
                 placeholder="Suggest a task for your department..."
                 value={dateTask}
                 onChange={(e) => setDateTask(e.target.value)}
+                required
                 style={{
                   width: '100%',
                   padding: '0.75rem',
@@ -601,6 +686,25 @@ function TodoList({ token, user }) {
                   color: '#e8eaed',
                   marginBottom: '0.5rem',
                   boxSizing: 'border-box'
+                }}
+              />
+              <textarea
+                placeholder="Short description (optional)..."
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                maxLength={200}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 113, 32, 0.3)',
+                  borderRadius: '8px',
+                  color: '#e8eaed',
+                  marginBottom: '0.5rem',
+                  boxSizing: 'border-box',
+                  minHeight: '60px',
+                  resize: 'vertical',
+                  fontFamily: 'inherit'
                 }}
               />
               <div>
@@ -643,18 +747,20 @@ function TodoList({ token, user }) {
               </div>
               <button
                 type="submit"
+                disabled={submitting}
                 style={{
                   width: '100%',
                   padding: '0.75rem',
-                  background: '#FF7120',
+                  background: submitting ? '#9ca3af' : '#FF7120',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '600'
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  fontWeight: '600',
+                  opacity: submitting ? 0.6 : 1
                 }}
               >
-                Suggest Task
+                {submitting ? 'Submitting...' : 'Suggest Task'}
               </button>
             </form>
           )}
@@ -667,9 +773,9 @@ function TodoList({ token, user }) {
             <CardSkeleton />
           ) : activeTab === 'department' ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <h3 style={{ margin: 0 }}>Department Tasks</h3>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <button
                     onClick={() => setDepartmentSubTab('active')}
                     style={{
@@ -680,7 +786,8 @@ function TodoList({ token, user }) {
                       borderRadius: '6px',
                       cursor: 'pointer',
                       fontSize: '0.85rem',
-                      fontWeight: '600'
+                      fontWeight: '600',
+                      whiteSpace: 'nowrap'
                     }}
                   >
                     Active
@@ -695,7 +802,8 @@ function TodoList({ token, user }) {
                       borderRadius: '6px',
                       cursor: 'pointer',
                       fontSize: '0.85rem',
-                      fontWeight: '600'
+                      fontWeight: '600',
+                      whiteSpace: 'nowrap'
                     }}
                   >
                     Completed
@@ -704,7 +812,7 @@ function TodoList({ token, user }) {
               </div>
               <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
                 {departmentSubTab === 'active' ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '1rem' }}>
                     {/* Suggested Tasks */}
                     <div>
                       <h3 style={{ color: '#e8eaed', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -715,29 +823,32 @@ function TodoList({ token, user }) {
                         </span>
                       </h3>
                       {departmentTasks.filter(t => t.status === 'suggested').map(task => (
-                        <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(245, 165, 36, 0.3)' }}>
-                          <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500' }}>{task.task}</p>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem' }}>
-                            <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Suggested by {task.suggester?.full_name}</span>
-                            {task.created_at && <span style={{ background: 'rgba(156, 163, 175, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#9ca3af' }}>Created: {new Date(task.created_at).toLocaleDateString()}</span>}
-                            {task.start_date && <span style={{ background: 'rgba(52, 152, 219, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#3498db' }}>Start: {new Date(task.start_date).toLocaleDateString()}</span>}
-                            {task.deadline && <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#e74c3c' }}>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>}
-                          </div>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(245, 165, 36, 0.3)', wordBreak: 'break-word', overflowWrap: 'break-word', display: 'flex', flexDirection: 'column' }}>
+                          <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500', wordBreak: 'break-word' }}>{task.task}</p>
+                          {task.description && <p style={{ margin: '0 0 0.75rem', color: '#9ca3af', fontSize: '0.85rem', fontStyle: 'italic', wordBreak: 'break-word' }}>{task.description}</p>}
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', marginBottom: '0.75rem' }}>
                             <button
                               onClick={() => grabDepartmentTask(task.id)}
-                              style={{ flex: 1, padding: '0.5rem', background: '#FF7120', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                              disabled={actionInProgress}
+                              style={{ flex: 1, padding: '0.5rem', background: actionInProgress ? '#6b7280' : '#FF7120', color: 'white', border: 'none', borderRadius: '6px', cursor: actionInProgress ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: actionInProgress ? 0.6 : 1 }}
                             >
                               Grab
                             </button>
                             {(task.suggested_by === userProfile?.id || isCoordinator) && (
                               <button
                                 onClick={() => deleteDepartmentTask(task.id)}
-                                style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                                disabled={actionInProgress}
+                                style={{ padding: '0.5rem', background: actionInProgress ? '#6b7280' : 'rgba(239, 68, 68, 0.2)', color: actionInProgress ? 'white' : '#ef4444', border: `1px solid ${actionInProgress ? '#6b7280' : 'rgba(239, 68, 68, 0.3)'}`, borderRadius: '6px', cursor: actionInProgress ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: actionInProgress ? 0.6 : 1 }}
                               >
                                 Delete
                               </button>
                             )}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280', wordBreak: 'break-word', paddingTop: '0.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Suggested by {task.suggester?.full_name}</span>
+                            {task.created_at && <span style={{ background: 'rgba(156, 163, 175, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#9ca3af' }}>Created: {new Date(task.created_at).toLocaleDateString()}</span>}
+                            {task.start_date && <span style={{ background: 'rgba(52, 152, 219, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#3498db' }}>Start: {new Date(task.start_date).toLocaleDateString()}</span>}
+                            {task.deadline && <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#e74c3c' }}>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>}
                           </div>
                         </div>
                       ))}
@@ -756,30 +867,33 @@ function TodoList({ token, user }) {
                         </span>
                       </h3>
                       {departmentTasks.filter(t => t.status === 'grabbed').map(task => (
-                        <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(255, 113, 32, 0.3)' }}>
-                          <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500' }}>{task.task}</p>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem' }}>
-                            <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Grabbed by {task.grabber?.full_name}</span>
-                            {task.grabbed_at && <span style={{ background: 'rgba(156, 163, 175, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#9ca3af' }}>Started: {new Date(task.grabbed_at).toLocaleDateString()}</span>}
-                            {task.start_date && <span style={{ background: 'rgba(52, 152, 219, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#3498db' }}>Start: {new Date(task.start_date).toLocaleDateString()}</span>}
-                            {task.deadline && <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#e74c3c' }}>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>}
-                          </div>
+                        <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(255, 113, 32, 0.3)', wordBreak: 'break-word', overflowWrap: 'break-word', display: 'flex', flexDirection: 'column' }}>
+                          <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500', wordBreak: 'break-word' }}>{task.task}</p>
+                          {task.description && <p style={{ margin: '0 0 0.75rem', color: '#9ca3af', fontSize: '0.85rem', fontStyle: 'italic', wordBreak: 'break-word' }}>{task.description}</p>}
                           {task.grabbed_by === userProfile?.id && (
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', marginBottom: '0.75rem' }}>
                               <button
                                 onClick={() => completeDepartmentTask(task.id)}
-                                style={{ flex: 1, padding: '0.5rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                                disabled={actionInProgress}
+                                style={{ flex: 1, padding: '0.5rem', background: actionInProgress ? '#6b7280' : '#28a745', color: 'white', border: 'none', borderRadius: '6px', cursor: actionInProgress ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: actionInProgress ? 0.6 : 1 }}
                               >
                                 Complete
                               </button>
                               <button
                                 onClick={() => abandonDepartmentTask(task.id)}
-                                style={{ padding: '0.5rem', background: 'rgba(156, 163, 175, 0.2)', color: '#9ca3af', border: '1px solid rgba(156, 163, 175, 0.3)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                                disabled={actionInProgress}
+                                style={{ padding: '0.5rem', background: actionInProgress ? '#6b7280' : 'rgba(156, 163, 175, 0.2)', color: actionInProgress ? 'white' : '#9ca3af', border: `1px solid ${actionInProgress ? '#6b7280' : 'rgba(156, 163, 175, 0.3)'}`, borderRadius: '6px', cursor: actionInProgress ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: actionInProgress ? 0.6 : 1 }}
                               >
                                 Abandon
                               </button>
                             </div>
                           )}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280', wordBreak: 'break-word', paddingTop: '0.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Grabbed by {task.grabber?.full_name}</span>
+                            {task.grabbed_at && <span style={{ background: 'rgba(156, 163, 175, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#9ca3af' }}>Started: {new Date(task.grabbed_at).toLocaleDateString()}</span>}
+                            {task.start_date && <span style={{ background: 'rgba(52, 152, 219, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#3498db' }}>Start: {new Date(task.start_date).toLocaleDateString()}</span>}
+                            {task.deadline && <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#e74c3c' }}>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>}
+                          </div>
                         </div>
                       ))}
                       {departmentTasks.filter(t => t.status === 'grabbed').length === 0 && (
@@ -797,9 +911,10 @@ function TodoList({ token, user }) {
                       </span>
                     </h3>
                     {departmentTasks.filter(t => t.status === 'completed').map(task => (
-                      <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(40, 167, 69, 0.3)' }}>
-                        <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500', textDecoration: 'line-through', opacity: 0.7 }}>{task.task}</p>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                      <div key={task.id} style={{ background: 'rgba(0, 39, 60, 0.5)', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid rgba(40, 167, 69, 0.3)', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                        <p style={{ margin: '0 0 0.5rem', color: '#e8eaed', fontWeight: '500', textDecoration: 'line-through', opacity: 0.7, wordBreak: 'break-word' }}>{task.task}</p>
+                        {task.description && <p style={{ margin: '0 0 0.75rem', color: '#9ca3af', fontSize: '0.85rem', fontStyle: 'italic', opacity: 0.7, wordBreak: 'break-word' }}>{task.description}</p>}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#6b7280', wordBreak: 'break-word', paddingTop: '0.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
                           <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Completed by {task.completer?.full_name}</span>
                           {task.completed_at && <span style={{ background: 'rgba(40, 167, 69, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#28a745' }}>Completed: {new Date(task.completed_at).toLocaleDateString()}</span>}
                           {task.grabbed_at && <span style={{ background: 'rgba(156, 163, 175, 0.2)', padding: '0.25rem 0.5rem', borderRadius: '4px', color: '#9ca3af' }}>Started: {new Date(task.grabbed_at).toLocaleDateString()}</span>}
@@ -819,7 +934,7 @@ function TodoList({ token, user }) {
             <>
               <h3 style={{ flexShrink: 0 }}>Tasks for {selectedDate.toLocaleDateString()}</h3>
 
-              {activeTab === 'team' && <TeamFilter filterText={filterText} setFilterText={setFilterText} filterMember={filterMember} setFilterMember={setFilterMember} groups={groups} Icon={Icon} />}
+              {activeTab === 'team' && teamSubTab === 'tasks' && <TeamFilter filterText={filterText} setFilterText={setFilterText} filterMember={filterMember} setFilterMember={setFilterMember} groups={groups} Icon={Icon} />}
 
               <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
                 {activeTab === 'assigned' ? (
@@ -831,7 +946,7 @@ function TodoList({ token, user }) {
                       {ongoingTodos.length === 0 ? (
                         <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No ongoing assigned tasks for this date.</p>
                       ) : (
-                        ongoingTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={false} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} />)
+                        ongoingTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={false} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} disabled={actionInProgress} />)
                       )}
                     </div>
                     <div>
@@ -841,7 +956,7 @@ function TodoList({ token, user }) {
                       {doneTodos.length === 0 ? (
                         <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No completed tasks for this date.</p>
                       ) : (
-                        doneTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={true} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} />)
+                        doneTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={true} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} disabled={actionInProgress} />)
                       )}
                     </div>
                   </div>
@@ -863,7 +978,7 @@ function TodoList({ token, user }) {
                           padding: '1rem 0'
                         }}>
                           <Icon name="clock" size={16} color="#f5a524" strokeWidth={2} />
-                          {activeTab === 'group' ? 'Pending Tasks' : 'Ongoing Tasks'}
+                          {activeTab === 'team' && teamSubTab === 'manage' ? 'Pending Tasks' : 'Ongoing Tasks'}
                           <span style={{ background: 'rgba(255, 113, 32, 0.2)', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem' }}>
                             {ongoingTodos.length}
                           </span>
@@ -871,12 +986,12 @@ function TodoList({ token, user }) {
                       {ongoingTodos.length === 0 ? (
                         <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No ongoing tasks for this date.</p>
                       ) : (
-                        ongoingTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={false} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} />)
+                        ongoingTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={false} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} disabled={actionInProgress} />)
                       )}
                       </div>
 
                       <div>
-                        {activeTab === 'group' ? (
+                        {activeTab === 'team' && teamSubTab === 'manage' ? (
                           /* Manage Tab - Member Stats */
                           <>
                             <h3 style={{
@@ -922,7 +1037,7 @@ function TodoList({ token, user }) {
                             {doneTodos.length === 0 ? (
                               <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No completed tasks for this date.</p>
                             ) : (
-                              doneTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={true} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} />)
+                              doneTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={true} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} disabled={actionInProgress} />)
                             )}
                           </>
                         )}

@@ -117,14 +117,17 @@ export const GroupInfo = ({ groups, userProfile, Icon }) => {
   );
 };
 
-export const TaskForm = ({ activeTab, isLeader, canAddTodo, dateTask, setDateTask, selectedAssignee, setSelectedAssignee, selectedDate, setSelectedDate, deadlineDate, setDeadlineDate, onSubmit, getGroupMembersForAssign }) => (
+export const TaskForm = ({ activeTab, isLeader, canAddTodo, dateTask, setDateTask, taskDescription, setTaskDescription, selectedAssignee, setSelectedAssignee, selectedDate, setSelectedDate, deadlineDate, setDeadlineDate, onSubmit, getGroupMembersForAssign, submitting }) => (
   <div className="checkin-form" style={{ marginTop: '1rem', padding: '1rem' }}>
     <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>{activeTab === 'team' ? 'Suggest Task' : 'Add Task'}</h3>
     {canAddTodo ? (
       <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <input type="text" value={dateTask} onChange={(e) => setDateTask(e.target.value)} placeholder={activeTab === 'assigned' ? 'Enter task to assign...' : 'Enter your task...'} style={{ width: '100%', padding: '0.75rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', fontSize: '0.9rem' }} required />
+        <input type="text" value={dateTask} onChange={(e) => setDateTask(e.target.value)} placeholder={activeTab === 'assigned' ? 'Enter task to assign...' : 'Enter your task...'} style={{ width: '100%', padding: '0.75rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', fontSize: '0.9rem' }} required disabled={submitting} />
+        {(activeTab === 'group' || activeTab === 'personal') && (
+          <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} placeholder="Task description (optional)..." maxLength={500} style={{ width: '100%', padding: '0.75rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', fontSize: '0.9rem', minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }} disabled={submitting} />
+        )}
         {activeTab === 'group' && (
-          <select value={selectedAssignee} onChange={(e) => setSelectedAssignee(e.target.value)} style={{ width: '100%', padding: '0.75rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', fontSize: '0.9rem' }} required>
+          <select value={selectedAssignee} onChange={(e) => setSelectedAssignee(e.target.value)} style={{ width: '100%', padding: '0.75rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', fontSize: '0.9rem' }} required disabled={submitting}>
             <option value="">Select assignee...</option>
             {getGroupMembersForAssign().map(member => <option key={member.id} value={member.id}>{member.full_name}</option>)}
           </select>
@@ -133,16 +136,16 @@ export const TaskForm = ({ activeTab, isLeader, canAddTodo, dateTask, setDateTas
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 180px', minWidth: 0 }}>
               <label style={{ display: 'block', marginBottom: '0.35rem', color: '#e8eaed', fontSize: '0.8rem' }}>Start Date</label>
-              <input type="date" value={selectedDate ? new Date(selectedDate).toISOString().split('T')[0] : ''} onChange={(e) => setSelectedDate(new Date(e.target.value))} style={{ width: '100%', padding: '0.6rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '6px', fontSize: '0.9rem' }} required />
+              <input type="date" value={selectedDate ? new Date(selectedDate).toISOString().split('T')[0] : ''} onChange={(e) => setSelectedDate(new Date(e.target.value))} style={{ width: '100%', padding: '0.6rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '6px', fontSize: '0.9rem' }} required disabled={submitting} />
             </div>
             <div style={{ flex: '1 1 180px', minWidth: 0 }}>
               <label style={{ display: 'block', marginBottom: '0.35rem', color: '#e8eaed', fontSize: '0.8rem' }}>Deadline</label>
-              <input type="date" value={deadlineDate ? new Date(deadlineDate).toISOString().split('T')[0] : ''} onChange={(e) => setDeadlineDate(new Date(e.target.value))} style={{ width: '100%', padding: '0.6rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '6px', fontSize: '0.9rem' }} required />
+              <input type="date" value={deadlineDate ? new Date(deadlineDate).toISOString().split('T')[0] : ''} onChange={(e) => setDeadlineDate(new Date(e.target.value))} style={{ width: '100%', padding: '0.6rem', background: '#001824', color: '#e8eaed', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '6px', fontSize: '0.9rem' }} required disabled={submitting} />
             </div>
           </div>
         )}
-        <button type="submit" className="todo-add-btn" style={{ width: '100%', padding: '0.75rem' }}>
-          {activeTab === 'team' ? 'Suggest Task' : activeTab === 'group' ? 'Assign Task' : 'Add Task'}
+        <button type="submit" className="todo-add-btn" style={{ width: '100%', padding: '0.75rem', opacity: submitting ? 0.6 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }} disabled={submitting}>
+          {submitting ? 'Submitting...' : (activeTab === 'team' ? 'Suggest Task' : activeTab === 'group' ? 'Assign Task' : 'Add Task')}
         </button>
       </form>
     ) : (

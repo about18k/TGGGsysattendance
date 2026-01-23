@@ -1272,7 +1272,7 @@ app.get('/api/todos', auth, async (req, res) => {
 // Create todo
 app.post('/api/todos', auth, async (req, res) => {
   try {
-    const { task, todo_type = 'personal', group_id, assigned_to, start_date, deadline } = req.body;
+    const { task, description, todo_type = 'personal', group_id, assigned_to, start_date, deadline } = req.body;
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('role, is_leader')
@@ -1285,6 +1285,9 @@ app.post('/api/todos', auth, async (req, res) => {
       todo_type,
       is_confirmed: true // Default to confirmed for personal todos
     };
+
+    // Add description if provided
+    if (description) todoData.description = description;
 
     // Add dates if provided (valid for all types, but specifically requested for personal)
     if (start_date) todoData.start_date = start_date;
