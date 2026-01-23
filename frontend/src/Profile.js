@@ -29,23 +29,21 @@ function Profile({ token, user, onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const parseHours = (timeStr) => {
+  const parseMinutes = (timeStr) => {
     if (!timeStr) return null;
     const parts = timeStr.trim().split(' ');
-    // Handles "HH:MM AM/PM" and also "HH:MM" or "HH:MM:SS" 24-hour strings
     if (parts.length === 2) {
       const [time, meridiem] = parts;
       let [h, m] = time.split(':').map(Number);
       if (meridiem.toUpperCase() === 'PM' && h !== 12) h += 12;
       if (meridiem.toUpperCase() === 'AM' && h === 12) h = 0;
-      return h + m / 60;
+      return h * 60 + m;
     }
-    // Fallback: assume 24-hour "HH:MM" or "HH:MM:SS"
     const [hRaw, mRaw] = timeStr.split(':');
     const h = Number(hRaw);
     const m = Number(mRaw);
     if (Number.isNaN(h) || Number.isNaN(m)) return null;
-    return h + m / 60;
+    return h * 60 + m;
   };
 
   const fetchAttendanceHours = async () => {
@@ -53,50 +51,42 @@ function Profile({ token, user, onLogout }) {
       const { data } = await axios.get(`${API}/attendance/my`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      let total = 0;
+      let totalMinutes = 0;
+      
       data.forEach(a => {
-        let sessionHours = 0;
-        
-        // Only count completed sessions (has both time_in and time_out)
         if (a.time_in && a.time_out) {
-          const start = parseHours(a.time_in);
-          const end = parseHours(a.time_out);
+          const inMinutes = parseMinutes(a.time_in);
+          const outMinutes = parseMinutes(a.time_out);
           
-          if (start !== null && end !== null) {
-            // Morning session: 8:00 AM - 12:00 PM
-            if (start < 12) {
-              const effectiveEnd = Math.min(end, 12);
-              // If On-Time, give full 4 hours. If Late, deduction already applied.
-              sessionHours = Math.max(0, effectiveEnd - 8);
-            } 
-            // Afternoon session: 1:00 PM - 5:00 PM
-            else {
-              const effectiveEnd = Math.min(end, 17);
-              // If On-Time, give full 4 hours. If Late, deduction already applied.
-              sessionHours = Math.max(0, effectiveEnd - 13);
+          if (inMinutes !== null && outMinutes !== null) {
+            const morningBaseline = 8 * 60;
+            const afternoonBaseline = 13 * 60;
+            const morningEnd = 12 * 60;
+            const afternoonEnd = 17 * 60;
+            
+            if (inMinutes < 12 * 60) {
+              // Morning session
+              totalMinutes += Math.max(0, Math.min(outMinutes, morningEnd) - morningBaseline);
+            } else {
+              // Afternoon session
+              totalMinutes += Math.max(0, Math.min(outMinutes, afternoonEnd) - afternoonBaseline);
             }
           }
         }
         
-        // Subtract late deduction for this session
-        if (a.late_deduction_hours) {
-          sessionHours = Math.max(0, sessionHours - a.late_deduction_hours);
-        }
-        
-        total += sessionHours;
-        
-        // Add overtime hours (7:00 PM - 10:00 PM)
+        // Add overtime
         if (a.ot_time_in && a.ot_time_out) {
-          const otStart = parseHours(a.ot_time_in);
-          const otEnd = parseHours(a.ot_time_out);
-          if (otStart !== null && otEnd !== null) {
-            const effectiveOtStart = Math.max(otStart, 19);
-            const effectiveOtEnd = Math.min(otEnd, 22);
-            total += Math.max(0, effectiveOtEnd - effectiveOtStart);
+          const otInMinutes = parseMinutes(a.ot_time_in);
+          const otOutMinutes = parseMinutes(a.ot_time_out);
+          if (otInMinutes !== null && otOutMinutes !== null) {
+            const overtimeBaseline = 19 * 60;
+            const overtimeEnd = 22 * 60;
+            totalMinutes += Math.max(0, Math.min(otOutMinutes, overtimeEnd) - overtimeBaseline);
           }
         }
       });
-      setTotalHours(total);
+      
+      setTotalHours(totalMinutes);
     } catch (err) {
       console.error('Failed to compute total hours', err);
     }
@@ -372,7 +362,7 @@ function Profile({ token, user, onLogout }) {
                 </p>
               </div>
               <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#FFB36B' }}>
-                {totalHours.toFixed(2)} hrs
+                {Math.floor(totalHours / 60)}h {totalHours % 60}m
               </span>
             </div>
             )}
